@@ -1,0 +1,20 @@
+{
+  "name": "erp-platform",
+  "private": true,
+  "workspaces": ["apps/*"],
+  "packageManager": "pnpm@9.14.2",
+  "scripts": {
+    "dev": "concurrently -n api,web \"npm run dev -w @erp/api\" \"npm run dev -w @erp/web\"",
+    "dev:web": "npm run dev -w @erp/web",
+    "dev:api": "npm run dev -w @erp/api",
+    "build": "npm run build --workspaces --if-present",
+    "db:generate": "npm run prisma -w @erp/api -- generate",
+    "db:migrate": "npm -w @erp/api exec prisma migrate dev",
+    "db:push": "npm -w @erp/api exec prisma db push",
+    "db:seed": "npm -w @erp/api exec prisma db seed",
+    "lint": "npm run lint --workspaces --if-present"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  }
+}

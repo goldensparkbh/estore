@@ -1,0 +1,36 @@
+# DigitalOcean App Platform (optional — you can also set these in the DO UI)
+name: erp-platform
+region: nyc
+
+services:
+  - name: api
+    source_dir: /
+    github:
+      repo: YOUR_GITHUB_USER/YOUR_REPO
+      branch: main
+      deploy_on_push: true
+    environment_slug: node-js
+    instance_size_slug: basic-xxs
+    http_port: 4000
+    build_command: npm install && npx prisma generate --schema apps/api/prisma/schema.prisma && npm run build -w @erp/api
+    run_command: node apps/api/dist/index.js
+    envs:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: "4000"
+      - key: DATABASE_URL
+        scope: RUN_AND_BUILD_TIME
+        type: SECRET
+
+static_sites:
+  - name: web
+    source_dir: /
+    github:
+      repo: YOUR_GITHUB_USER/YOUR_REPO
+      branch: main
+      deploy_on_push: true
+    build_command: npm install && npm run build -w @erp/web
+    output_dir: apps/web/dist
+    index_document: index.html
+    catchall_document: index.html

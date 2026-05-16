@@ -3,7 +3,7 @@ dist
 .turbo
 .env
 .env.*
-!.env.example
+.env.example
 storage/payslips
 *.log
 .DS_Store

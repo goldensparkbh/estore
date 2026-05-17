@@ -30,6 +30,21 @@ export async function attachTenantContext(
       "https://erp.example/problems/missing-identity",
     );
   }
+  const tenant = await prisma.tenant.findUnique({
+    where: { id: tenantId },
+    select: { id: true, isSuspended: true },
+  });
+  if (!tenant) {
+    throw new AppError(403, "Forbidden", "Unknown tenant.", "https://erp.example/problems/tenant-mismatch");
+  }
+  if (tenant.isSuspended) {
+    throw new AppError(
+      403,
+      "Organization suspended",
+      "This workspace has been suspended. Contact platform support.",
+      "https://erp.example/problems/tenant-suspended",
+    );
+  }
   const user = await prisma.user.findFirst({
     where: { id: userId, tenantId, isActive: true },
     select: { id: true },

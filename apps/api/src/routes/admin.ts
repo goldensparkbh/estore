@@ -5,6 +5,8 @@ import { prisma } from "../lib/prisma.js";
 import { AppError } from "../lib/problem.js";
 import { requirePlatformAdmin } from "../middleware/platform-admin.js";
 import { addBillingPeriod, changePlanForTenant, parsePlanFeatures } from "../services/billing.js";
+import { sendPlatformEmail } from "../services/email.js";
+import { adminPlatformRoutes } from "./admin-platform.js";
 
 function parseBody<T>(schema: z.ZodType<T>, body: unknown): T {
   const parsed = schema.safeParse(body);
@@ -126,6 +128,8 @@ function serializeSubscription(
 }
 
 export const adminRoutes: FastifyPluginAsync = async (app) => {
+  await app.register(adminPlatformRoutes);
+
   app.get("/stats", async (request) => {
     requirePlatformAdmin(request);
     const now = new Date();
@@ -308,6 +312,7 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
         slug: t.slug,
         timezone: t.timezone,
         baseCurrencyCode: t.baseCurrencyCode,
+        isSuspended: t.isSuspended,
         createdAt: t.createdAt.toISOString(),
         userCount: t._count.users,
         productCount: t._count.products,
@@ -394,6 +399,7 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
         name: z.string().min(2).max(200).optional(),
         timezone: z.string().min(1).max(64).optional(),
         baseCurrencyCode: z.string().length(3).optional(),
+        isSuspended: z.boolean().optional(),
       }),
       request.body,
     );
@@ -409,6 +415,7 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
         slug: updated.slug,
         timezone: updated.timezone,
         baseCurrencyCode: updated.baseCurrencyCode,
+        isSuspended: updated.isSuspended,
       },
     };
   });
@@ -645,13 +652,34 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
       },
     });
 
+    let emailResult: { sent: boolean; error?: string } | undefined;
+    if (body.channel === "EMAIL") {
+      const owner = await prisma.user.findFirst({
+        where: { tenantId: sub.tenantId, role: "OWNER", isActive: true },
+        select: { email: true },
+      });
+      if (owner?.email) {
+        const sent = await sendPlatformEmail({
+          to: owner.email,
+          subject: `Subscription reminder — ${sub.tenant.name}`,
+          text: body.message,
+        });
+        emailResult = { sent: sent.sent, error: sent.error };
+      } else {
+        emailResult = { sent: false, error: "No active owner email for tenant" };
+      }
+    }
+
     return {
       data: {
         id: reminder.id,
         sentAt: reminder.sentAt.toISOString(),
+        emailDelivery: emailResult,
         note:
           body.channel === "EMAIL"
-            ? "Reminder logged. Connect an email provider to deliver messages in production."
+            ? emailResult?.sent
+              ? "Reminder emailed to tenant owner."
+              : emailResult?.error ?? "Email not sent — check Resend configuration."
             : "In-app reminder recorded.",
       },
     };

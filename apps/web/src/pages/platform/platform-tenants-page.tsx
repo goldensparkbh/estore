@@ -1,7 +1,9 @@
 import type { FormEvent, ReactElement } from "react";
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { adminApiFetch } from "@/lib/admin-api";
+import { adminDownloadCsv } from "@/lib/admin-download";
 import type { TenantListItem } from "@/lib/platform-types";
 import { inputClass, labelClass } from "@/lib/platform-types";
 import { PageHeader } from "@/components/platform/page-header";
@@ -14,24 +16,11 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 
-interface TenantDetail {
-  id: string;
-  name: string;
-  slug: string;
-  timezone: string;
-  baseCurrencyCode: string;
-  createdAt: string;
-  counts: { products: number; warehouses: number; sales: number };
-  users: { id: string; email: string; displayName: string; role: string; isActive: boolean }[];
-  subscriptions: { id: string; status: string; plan: { name: string; slug: string } }[];
-}
-
 export function PlatformTenantsPage(): ReactElement {
   const qc = useQueryClient();
   const [search, setSearch] = useState("");
-  const [detailId, setDetailId] = useState<string | null>(null);
-  const [editTenant, setEditTenant] = useState<TenantListItem | null>(null);
-  const [assignTenant, setAssignTenant] = useState<TenantListItem | null>(null);
+  const [showCreate, setShowCreate] = useState(false);
+  const [exporting, setExporting] = useState(false);
 
   const list = useQuery({
     queryKey: ["admin-tenants", search],
@@ -41,55 +30,49 @@ export function PlatformTenantsPage(): ReactElement {
     },
   });
 
-  const detail = useQuery({
-    queryKey: ["admin-tenant", detailId],
-    queryFn: () => adminApiFetch<{ data: TenantDetail }>(`/v1/admin/tenants/${detailId}`),
-    enabled: Boolean(detailId),
-  });
-
   const plans = useQuery({
     queryKey: ["admin-plans"],
     queryFn: () =>
       adminApiFetch<{ data: { slug: string; name: string }[] }>("/v1/admin/plans"),
   });
 
-  const patchTenant = useMutation({
-    mutationFn: (body: { id: string; name: string; timezone: string; baseCurrencyCode: string }) =>
-      adminApiFetch(`/v1/admin/tenants/${body.id}`, {
-        method: "PATCH",
-        body: JSON.stringify({
-          name: body.name,
-          timezone: body.timezone,
-          baseCurrencyCode: body.baseCurrencyCode,
-        }),
-      }),
+  const createTenant = useMutation({
+    mutationFn: (body: Record<string, string>) =>
+      adminApiFetch("/v1/admin/tenants", { method: "POST", body: JSON.stringify(body) }),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["admin-tenants"] });
-      setEditTenant(null);
-    },
-  });
-
-  const assignPlan = useMutation({
-    mutationFn: (body: { id: string; planSlug: string }) =>
-      adminApiFetch(`/v1/admin/tenants/${body.id}/assign-plan`, {
-        method: "POST",
-        body: JSON.stringify({ planSlug: body.planSlug }),
-      }),
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["admin-tenants"] });
-      if (detailId) void qc.invalidateQueries({ queryKey: ["admin-tenant", detailId] });
-      setAssignTenant(null);
+      setShowCreate(false);
     },
   });
 
   return (
-    <div className="mx-auto max-w-6xl space-y-6">
+    <section className="mx-auto max-w-6xl space-y-6">
       <PageHeader
         title="Tenants"
-        description="Organizations using the ERP. Edit settings or assign subscription plans."
+        description="Create and manage customer organizations, users, and workspace access."
+        actions={
+          <>
+            <Button
+              type="button"
+              variant="subtle"
+              disabled={exporting}
+              onClick={() => {
+                setExporting(true);
+                void adminDownloadCsv("/v1/admin/export/tenants", "tenants.csv").finally(() =>
+                  setExporting(false),
+                );
+              }}
+            >
+              {exporting ? "Exporting…" : "Export CSV"}
+            </Button>
+            <Button type="button" onClick={() => setShowCreate(true)}>
+              New tenant
+            </Button>
+          </>
+        }
       />
 
-      <div className="flex gap-2">
+      <section className="flex gap-2">
         <input
           className={`${inputClass} max-w-sm`}
           placeholder="Search name or slug…"
@@ -99,16 +82,18 @@ export function PlatformTenantsPage(): ReactElement {
         <Button type="button" variant="subtle" onClick={() => void list.refetch()}>
           Search
         </Button>
-      </div>
+      </section>
 
-      <div className="overflow-hidden rounded-xl border border-border bg-card">
+      <section className="overflow-hidden rounded-xl border border-border bg-card">
         {list.isLoading && <p className="p-4 text-sm text-muted-foreground">Loading…</p>}
+        {list.isError && <p className="p-4 text-sm text-red-400">{(list.error as Error).message}</p>}
         <table className="w-full text-left text-sm">
           <thead className="border-b border-border text-xs uppercase text-muted-foreground">
             <tr>
               <th className="px-4 py-3">Organization</th>
               <th className="px-4 py-3">Users</th>
               <th className="px-4 py-3">Subscription</th>
+              <th className="px-4 py-3">Status</th>
               <th className="px-4 py-3 text-right">Actions</th>
             </tr>
           </thead>
@@ -130,171 +115,96 @@ export function PlatformTenantsPage(): ReactElement {
                     <span className="text-muted-foreground">None</span>
                   )}
                 </td>
+                <td className="px-4 py-3">
+                  {t.isSuspended ? (
+                    <span className="text-xs font-medium text-amber-400">Suspended</span>
+                  ) : (
+                    <span className="text-xs text-muted-foreground">Active</span>
+                  )}
+                </td>
                 <td className="px-4 py-3 text-right">
-                  <Button size="sm" variant="subtle" type="button" onClick={() => setDetailId(t.id)}>
-                    Details
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="subtle"
-                    type="button"
-                    className="ml-1"
-                    onClick={() => setEditTenant(t)}
-                  >
-                    Edit
-                  </Button>
-                  <Button
-                    size="sm"
-                    type="button"
-                    className="ml-1"
-                    onClick={() => setAssignTenant(t)}
-                  >
-                    Plan
+                  <Button size="sm" type="button" asChild>
+                    <Link to={`/platform/tenants/${t.id}`}>Manage</Link>
                   </Button>
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
-      </div>
+      </section>
 
-      <Dialog open={Boolean(detailId)} onOpenChange={(open) => !open && setDetailId(null)}>
-        <DialogContent className="max-w-lg">
-          <DialogTitle>Tenant details</DialogTitle>
-          {detail.isLoading && <p className="text-sm text-muted-foreground">Loading…</p>}
-          {detail.data?.data && (
-            <div className="space-y-4 text-sm">
-              <p>
-                <span className="text-muted-foreground">Slug:</span>{" "}
-                <span className="font-mono">{detail.data.data.slug}</span>
-              </p>
-              <p>
-                <span className="text-muted-foreground">Timezone:</span> {detail.data.data.timezone}
-              </p>
-              <p>
-                <span className="text-muted-foreground">Currency:</span>{" "}
-                {detail.data.data.baseCurrencyCode}
-              </p>
-              <p>
-                <span className="text-muted-foreground">Products / warehouses / sales:</span>{" "}
-                {detail.data.data.counts.products} / {detail.data.data.counts.warehouses} /{" "}
-                {detail.data.data.counts.sales}
-              </p>
-              <div>
-                <p className="mb-2 font-medium">Users</p>
-                <ul className="space-y-1 text-muted-foreground">
-                  {detail.data.data.users.map((u) => (
-                    <li key={u.id}>
-                      {u.displayName} ({u.email}) — {u.role}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={Boolean(editTenant)} onOpenChange={(open) => !open && setEditTenant(null)}>
-        <DialogContent>
-          <DialogTitle>Edit tenant</DialogTitle>
-          {editTenant && (
-            <TenantEditForm
-              tenant={editTenant}
-              pending={patchTenant.isPending}
-              onSubmit={(data) => patchTenant.mutate({ id: editTenant.id, ...data })}
-            />
-          )}
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={Boolean(assignTenant)} onOpenChange={(open) => !open && setAssignTenant(null)}>
-        <DialogContent>
-          <DialogTitle>Assign plan</DialogTitle>
+      <Dialog open={showCreate} onOpenChange={setShowCreate}>
+        <DialogContent className="max-h-[90vh] overflow-y-auto">
+          <DialogTitle>Create tenant</DialogTitle>
           <DialogDescription>
-            Replaces the active subscription for {assignTenant?.name}.
+            Provisions a new organization with an owner account and subscription plan.
           </DialogDescription>
-          {assignTenant && (
-            <AssignPlanForm
-              plans={plans.data?.data ?? []}
-              pending={assignPlan.isPending}
-              onSubmit={(planSlug) => assignPlan.mutate({ id: assignTenant.id, planSlug })}
-            />
-          )}
+          <CreateTenantForm
+            plans={plans.data?.data ?? []}
+            pending={createTenant.isPending}
+            error={createTenant.isError ? (createTenant.error as Error).message : null}
+            onSubmit={(body) => createTenant.mutate(body)}
+          />
         </DialogContent>
       </Dialog>
-    </div>
+    </section>
   );
 }
 
-function TenantEditForm({
-  tenant,
-  pending,
-  onSubmit,
-}: {
-  tenant: TenantListItem;
-  pending: boolean;
-  onSubmit: (data: { name: string; timezone: string; baseCurrencyCode: string }) => void;
-}): ReactElement {
-  const [name, setName] = useState(tenant.name);
-  const [timezone, setTimezone] = useState(tenant.timezone);
-  const [baseCurrencyCode, setBaseCurrencyCode] = useState(tenant.baseCurrencyCode);
-
-  return (
-    <form
-      className="space-y-3 pt-2"
-      onSubmit={(e: FormEvent) => {
-        e.preventDefault();
-        onSubmit({ name, timezone, baseCurrencyCode });
-      }}
-    >
-      <label className="block text-sm">
-        <span className={labelClass}>Name</span>
-        <input className={inputClass} value={name} onChange={(e) => setName(e.target.value)} />
-      </label>
-      <label className="block text-sm">
-        <span className={labelClass}>Timezone</span>
-        <input
-          className={inputClass}
-          value={timezone}
-          onChange={(e) => setTimezone(e.target.value)}
-        />
-      </label>
-      <label className="block text-sm">
-        <span className={labelClass}>Base currency</span>
-        <input
-          className={inputClass}
-          maxLength={3}
-          value={baseCurrencyCode}
-          onChange={(e) => setBaseCurrencyCode(e.target.value.toUpperCase())}
-        />
-      </label>
-      <Button type="submit" disabled={pending}>
-        {pending ? "Saving…" : "Save"}
-      </Button>
-    </form>
-  );
-}
-
-function AssignPlanForm({
+function CreateTenantForm({
   plans,
   pending,
+  error,
   onSubmit,
 }: {
   plans: { slug: string; name: string }[];
   pending: boolean;
-  onSubmit: (planSlug: string) => void;
+  error: string | null;
+  onSubmit: (body: Record<string, string>) => void;
 }): ReactElement {
-  const [planSlug, setPlanSlug] = useState(plans[0]?.slug ?? "");
+  const [organizationName, setOrganizationName] = useState("");
+  const [slug, setSlug] = useState("");
+  const [planSlug, setPlanSlug] = useState(plans[0]?.slug ?? "free");
+  const [ownerEmail, setOwnerEmail] = useState("");
+  const [ownerPassword, setOwnerPassword] = useState("");
+  const [ownerDisplayName, setOwnerDisplayName] = useState("");
+  const [timezone, setTimezone] = useState("UTC");
 
   return (
     <form
       className="space-y-3 pt-2"
       onSubmit={(e: FormEvent) => {
         e.preventDefault();
-        onSubmit(planSlug);
+        onSubmit({
+          organizationName,
+          ...(slug.trim() ? { slug: slug.trim() } : {}),
+          planSlug,
+          ownerEmail,
+          ownerPassword,
+          ownerDisplayName: ownerDisplayName || organizationName,
+          timezone,
+        });
       }}
     >
+      {error && <p className="text-sm text-red-400">{error}</p>}
+      <label className="block text-sm">
+        <span className={labelClass}>Organization name</span>
+        <input
+          className={inputClass}
+          required
+          value={organizationName}
+          onChange={(e) => setOrganizationName(e.target.value)}
+        />
+      </label>
+      <label className="block text-sm">
+        <span className={labelClass}>Slug (optional)</span>
+        <input
+          className={inputClass}
+          placeholder="auto-generated"
+          value={slug}
+          onChange={(e) => setSlug(e.target.value)}
+        />
+      </label>
       <label className="block text-sm">
         <span className={labelClass}>Plan</span>
         <select className={inputClass} value={planSlug} onChange={(e) => setPlanSlug(e.target.value)}>
@@ -305,8 +215,41 @@ function AssignPlanForm({
           ))}
         </select>
       </label>
-      <Button type="submit" disabled={pending || !planSlug}>
-        {pending ? "Assigning…" : "Assign plan"}
+      <label className="block text-sm">
+        <span className={labelClass}>Owner email</span>
+        <input
+          type="email"
+          required
+          className={inputClass}
+          value={ownerEmail}
+          onChange={(e) => setOwnerEmail(e.target.value)}
+        />
+      </label>
+      <label className="block text-sm">
+        <span className={labelClass}>Owner password</span>
+        <input
+          type="password"
+          required
+          minLength={10}
+          className={inputClass}
+          value={ownerPassword}
+          onChange={(e) => setOwnerPassword(e.target.value)}
+        />
+      </label>
+      <label className="block text-sm">
+        <span className={labelClass}>Owner display name</span>
+        <input
+          className={inputClass}
+          value={ownerDisplayName}
+          onChange={(e) => setOwnerDisplayName(e.target.value)}
+        />
+      </label>
+      <label className="block text-sm">
+        <span className={labelClass}>Timezone</span>
+        <input className={inputClass} value={timezone} onChange={(e) => setTimezone(e.target.value)} />
+      </label>
+      <Button type="submit" disabled={pending} className="w-full">
+        {pending ? "Creating…" : "Create tenant"}
       </Button>
     </form>
   );

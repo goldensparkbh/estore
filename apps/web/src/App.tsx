@@ -11,6 +11,9 @@ import { PlatformDashboardPage } from "@/pages/platform/platform-dashboard-page"
 import { PlatformTenantsPage } from "@/pages/platform/platform-tenants-page";
 import { PlatformSubscriptionsPage } from "@/pages/platform/platform-subscriptions-page";
 import { PlatformPlansPage } from "@/pages/platform/platform-plans-page";
+import { PlatformTenantDetailPage } from "@/pages/platform/platform-tenant-detail-page";
+import { PlatformAuditPage } from "@/pages/platform/platform-audit-page";
+import { PlatformSettingsPage } from "@/pages/platform/platform-settings-page";
 import { DashboardPage } from "@/pages/dashboard-page";
 import { InventoryPage } from "@/pages/inventory-page";
 import { PosPage } from "@/pages/pos-page";
@@ -40,8 +43,11 @@ export function App(): ReactElement {
           <Route element={<PlatformShell />}>
             <Route index element={<PlatformDashboardPage />} />
             <Route path="tenants" element={<PlatformTenantsPage />} />
+            <Route path="tenants/:tenantId" element={<PlatformTenantDetailPage />} />
             <Route path="subscriptions" element={<PlatformSubscriptionsPage />} />
             <Route path="plans" element={<PlatformPlansPage />} />
+            <Route path="audit" element={<PlatformAuditPage />} />
+            <Route path="settings" element={<PlatformSettingsPage />} />
           </Route>
         </Route>
         <Route path="/app" element={<RequireTenant />}>

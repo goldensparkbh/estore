@@ -2,10 +2,12 @@ import type { ReactElement } from "react";
 import { NavLink } from "react-router-dom";
 import {
   Building2,
+  ClipboardList,
   CreditCard,
   LayoutDashboard,
   Layers,
   LogOut,
+  Mail,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -16,6 +18,8 @@ const nav = [
   { to: "/platform/tenants", label: "Tenants", icon: Building2 },
   { to: "/platform/subscriptions", label: "Subscriptions", icon: CreditCard },
   { to: "/platform/plans", label: "Plans", icon: Layers },
+  { to: "/platform/audit", label: "Activity", icon: ClipboardList },
+  { to: "/platform/settings", label: "Email", icon: Mail },
 ];
 
 export function PlatformSidebar(): ReactElement {

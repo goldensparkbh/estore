@@ -15,6 +15,7 @@ model Tenant {
   slug             String   @unique
   timezone         String   @default("UTC")
   baseCurrencyCode String   @default("USD")
+  isSuspended      Boolean  @default(false)
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 

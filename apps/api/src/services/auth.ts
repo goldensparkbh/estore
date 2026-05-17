@@ -3,7 +3,7 @@ import { prisma } from "../lib/prisma.js";
 import { AppError } from "../lib/problem.js";
 import { addBillingPeriod } from "./billing.js";
 
-function slugifyOrg(name: string): string {
+export function slugifyOrg(name: string): string {
   const base = name
     .toLowerCase()
     .trim()
@@ -13,7 +13,7 @@ function slugifyOrg(name: string): string {
   return base.length > 0 ? base : "org";
 }
 
-async function uniqueTenantSlug(base: string): Promise<string> {
+export async function uniqueTenantSlug(base: string): Promise<string> {
   let candidate = base;
   for (let i = 0; i < 8; i++) {
     const exists = await prisma.tenant.findUnique({ where: { slug: candidate } });
@@ -104,6 +104,13 @@ export async function loginTenantUser(input: LoginInput): Promise<AuthIdentity> 
   });
   if (!tenant || tenant.users.length === 0) {
     throw new AppError(401, "Invalid credentials", "Check organization, email, and password.");
+  }
+  if (tenant.isSuspended) {
+    throw new AppError(
+      403,
+      "Organization suspended",
+      "This workspace has been suspended. Contact platform support.",
+    );
   }
   const user = tenant.users[0];
   if (!user.isActive) {

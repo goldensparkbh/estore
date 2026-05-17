@@ -38,6 +38,7 @@ export interface TenantListItem {
   slug: string;
   timezone: string;
   baseCurrencyCode: string;
+  isSuspended: boolean;
   createdAt: string;
   userCount: number;
   productCount: number;

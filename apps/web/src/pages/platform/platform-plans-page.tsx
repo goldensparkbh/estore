@@ -2,6 +2,7 @@ import type { FormEvent, ReactElement } from "react";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { adminApiFetch } from "@/lib/admin-api";
+import { adminDownloadCsv } from "@/lib/admin-download";
 import type { PlanFeatures, PlatformPlan } from "@/lib/platform-types";
 import { inputClass, labelClass } from "@/lib/platform-types";
 import { PageHeader } from "@/components/platform/page-header";
@@ -24,6 +25,7 @@ export function PlatformPlansPage(): ReactElement {
   const qc = useQueryClient();
   const [showInactive, setShowInactive] = useState(false);
   const [editor, setEditor] = useState<PlatformPlan | null | "new">(null);
+  const [exporting, setExporting] = useState(false);
 
   const q = useQuery({
     queryKey: ["admin-plans", showInactive],
@@ -61,9 +63,24 @@ export function PlatformPlansPage(): ReactElement {
         title="Subscription plans"
         description="Create and edit plans shown on the marketing site and tenant billing."
         actions={
-          <Button type="button" onClick={() => setEditor("new")}>
-            New plan
-          </Button>
+          <>
+            <Button
+              type="button"
+              variant="subtle"
+              disabled={exporting}
+              onClick={() => {
+                setExporting(true);
+                void adminDownloadCsv("/v1/admin/export/plans", "plans.csv").finally(() =>
+                  setExporting(false),
+                );
+              }}
+            >
+              {exporting ? "Exporting…" : "Export CSV"}
+            </Button>
+            <Button type="button" onClick={() => setEditor("new")}>
+              New plan
+            </Button>
+          </>
         }
       />
 

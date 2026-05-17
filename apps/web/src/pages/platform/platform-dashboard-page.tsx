@@ -62,6 +62,12 @@ export function PlatformDashboardPage(): ReactElement {
           <Button type="button" variant="subtle" asChild>
             <Link to="/platform/plans">Manage plans</Link>
           </Button>
+          <Button type="button" variant="subtle" asChild>
+            <Link to="/platform/audit">Activity log</Link>
+          </Button>
+          <Button type="button" variant="subtle" asChild>
+            <Link to="/platform/settings">Email settings</Link>
+          </Button>
         </div>
       </div>
     </div>

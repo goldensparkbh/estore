@@ -2,6 +2,7 @@ import type { FormEvent, ReactElement } from "react";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { adminApiFetch } from "@/lib/admin-api";
+import { adminDownloadCsv } from "@/lib/admin-download";
 import {
   SUBSCRIPTION_STATUSES,
   type SubscriptionRow,
@@ -27,6 +28,8 @@ export function PlatformSubscriptionsPage(): ReactElement {
   const [reminderMessage, setReminderMessage] = useState(
     "Your subscription renews soon. Please update billing to avoid interruption.",
   );
+  const [reminderNote, setReminderNote] = useState<string | null>(null);
+  const [exporting, setExporting] = useState(false);
 
   const queryKey = ["admin-subs", statusFilter, expiringOnly];
   const q = useQuery({
@@ -74,12 +77,13 @@ export function PlatformSubscriptionsPage(): ReactElement {
 
   const remindSub = useMutation({
     mutationFn: ({ id, message }: { id: string; message: string }) =>
-      adminApiFetch(`/v1/admin/subscriptions/${id}/reminders`, {
+      adminApiFetch<{ data: { note?: string } }>(`/v1/admin/subscriptions/${id}/reminders`, {
         method: "POST",
         body: JSON.stringify({ message, channel: "EMAIL", templateKey: "RENEWAL_DUE" }),
       }),
-    onSuccess: () => {
+    onSuccess: (res) => {
       void qc.invalidateQueries({ queryKey: ["admin-subs"] });
+      setReminderNote(res.data.note ?? "Reminder logged.");
       setReminderRow(null);
     },
   });
@@ -95,7 +99,25 @@ export function PlatformSubscriptionsPage(): ReactElement {
       <PageHeader
         title="Subscriptions"
         description="View and manage customer billing periods, plan assignments, and renewal reminders."
+        actions={
+          <Button
+            type="button"
+            variant="subtle"
+            disabled={exporting}
+            onClick={() => {
+              setExporting(true);
+              void adminDownloadCsv("/v1/admin/export/subscriptions", "subscriptions.csv").finally(
+                () => setExporting(false),
+              );
+            }}
+          >
+            {exporting ? "Exporting…" : "Export CSV"}
+          </Button>
+        }
       />
+      {reminderNote && (
+        <p className="rounded-md bg-muted px-3 py-2 text-sm text-muted-foreground">{reminderNote}</p>
+      )}
 
       <div className="flex flex-wrap items-end gap-3 rounded-xl border border-border bg-card p-4">
         <label className="text-sm">

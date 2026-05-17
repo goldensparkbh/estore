@@ -117,6 +117,11 @@ async function main(): Promise<void> {
     });
     // eslint-disable-next-line no-console -- seed script
     console.info("Platform admin:", adminEmail);
+  } else {
+    // eslint-disable-next-line no-console -- seed script
+    console.warn(
+      "Skipped platform admin — set SEED_PLATFORM_ADMIN_EMAIL and SEED_PLATFORM_ADMIN_PASSWORD in repo root .env",
+    );
   }
 
   const tenant = await prisma.tenant.upsert({

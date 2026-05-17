@@ -12,10 +12,14 @@
     "db:generate": "npx prisma generate --schema apps/api/prisma/schema.prisma",
     "db:migrate": "npm -w @erp/api exec prisma migrate dev",
     "db:push": "npm -w @erp/api exec prisma db push",
-    "db:seed": "npm -w @erp/api exec prisma db seed",
+    "db:seed": "node --env-file=.env --import tsx apps/api/prisma/seed.ts",
     "lint": "npm run lint --workspaces --if-present"
   },
   "devDependencies": {
-    "concurrently": "^9.1.2"
+    "concurrently": "^9.1.2",
+    "tsx": "^4.19.2"
+  },
+  "prisma": {
+    "seed": "node --env-file=.env --import tsx apps/api/prisma/seed.ts"
   }
 }

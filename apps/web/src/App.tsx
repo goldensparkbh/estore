@@ -5,7 +5,12 @@ import { LandingPage } from "@/pages/landing-page";
 import { LoginPage } from "@/pages/login-page";
 import { SignupPage } from "@/pages/signup-page";
 import { PlatformLoginPage } from "@/pages/platform-login-page";
-import { PlatformAdminPage } from "@/pages/platform-admin-page";
+import { PlatformShell } from "@/components/layout/platform-shell";
+import { RequirePlatformAdmin } from "@/components/platform/require-platform-admin";
+import { PlatformDashboardPage } from "@/pages/platform/platform-dashboard-page";
+import { PlatformTenantsPage } from "@/pages/platform/platform-tenants-page";
+import { PlatformSubscriptionsPage } from "@/pages/platform/platform-subscriptions-page";
+import { PlatformPlansPage } from "@/pages/platform/platform-plans-page";
 import { DashboardPage } from "@/pages/dashboard-page";
 import { InventoryPage } from "@/pages/inventory-page";
 import { PosPage } from "@/pages/pos-page";
@@ -31,7 +36,14 @@ export function App(): ReactElement {
         <Route path="/login" element={<LoginPage />} />
         <Route path="/signup" element={<SignupPage />} />
         <Route path="/platform/login" element={<PlatformLoginPage />} />
-        <Route path="/platform" element={<PlatformAdminPage />} />
+        <Route path="/platform" element={<RequirePlatformAdmin />}>
+          <Route element={<PlatformShell />}>
+            <Route index element={<PlatformDashboardPage />} />
+            <Route path="tenants" element={<PlatformTenantsPage />} />
+            <Route path="subscriptions" element={<PlatformSubscriptionsPage />} />
+            <Route path="plans" element={<PlatformPlansPage />} />
+          </Route>
+        </Route>
         <Route path="/app" element={<RequireTenant />}>
           <Route element={<AppShell />}>
             <Route index element={<Navigate to="dashboard" replace />} />

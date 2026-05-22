@@ -12,6 +12,7 @@ import {
   Receipt,
   Settings,
   Sun,
+  UserCircle,
   Users,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -24,8 +25,10 @@ const nav: { to: string; label: string; icon: typeof LayoutDashboard }[] = [
   { to: "/app/pos", label: "Point of Sale", icon: CreditCard },
   { to: "/app/hr", label: "HR & Payroll", icon: Users },
   { to: "/app/billing", label: "Billing", icon: Receipt },
+  { to: "/app/team", label: "Team", icon: Users },
   { to: "/app/reference", label: "Currencies", icon: Building2 },
-  { to: "/app/session", label: "Session", icon: Settings },
+  { to: "/app/account", label: "Account", icon: UserCircle },
+  { to: "/app/session", label: "Dev session", icon: Settings },
 ];
 
 export function Sidebar(): ReactElement {

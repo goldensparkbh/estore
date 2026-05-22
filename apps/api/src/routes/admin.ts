@@ -49,6 +49,8 @@ const planBodySchema = z.object({
   features: planFeaturesSchema,
   sortOrder: z.number().int().min(0).max(9999).optional(),
   isActive: z.boolean().optional(),
+  stripePriceIdMonthly: z.string().max(200).nullable().optional(),
+  stripePriceIdAnnual: z.string().max(200).nullable().optional(),
 });
 
 function serializePlan(p: {
@@ -64,6 +66,8 @@ function serializePlan(p: {
   features: unknown;
   isActive: boolean;
   sortOrder: number;
+  stripePriceIdMonthly?: string | null;
+  stripePriceIdAnnual?: string | null;
   createdAt: Date;
   updatedAt: Date;
   _count?: { subscriptions: number };
@@ -81,6 +85,8 @@ function serializePlan(p: {
     features: parsePlanFeatures(p.features),
     isActive: p.isActive,
     sortOrder: p.sortOrder,
+    stripePriceIdMonthly: p.stripePriceIdMonthly ?? null,
+    stripePriceIdAnnual: p.stripePriceIdAnnual ?? null,
     subscriptionCount: p._count?.subscriptions ?? 0,
     createdAt: p.createdAt.toISOString(),
     updatedAt: p.updatedAt.toISOString(),
@@ -206,6 +212,8 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
         features: body.features as unknown as Prisma.InputJsonValue,
         sortOrder: body.sortOrder ?? 0,
         isActive: body.isActive ?? true,
+        stripePriceIdMonthly: body.stripePriceIdMonthly ?? null,
+        stripePriceIdAnnual: body.stripePriceIdAnnual ?? null,
       },
       include: { _count: { select: { subscriptions: true } } },
     });
@@ -239,6 +247,8 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
         features: body.features as unknown as Prisma.InputJsonValue | undefined,
         sortOrder: body.sortOrder,
         isActive: body.isActive,
+        stripePriceIdMonthly: body.stripePriceIdMonthly,
+        stripePriceIdAnnual: body.stripePriceIdAnnual,
       },
       include: { _count: { select: { subscriptions: true } } },
     });

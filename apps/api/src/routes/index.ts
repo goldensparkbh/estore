@@ -4,8 +4,12 @@ import { inventoryRoutes } from "./inventory.js";
 import { hrRoutes } from "./hr.js";
 import { posRoutes } from "./pos.js";
 import { referenceRoutes } from "./reference.js";
+import { accountRoutes } from "./account.js";
+import { tenantUserRoutes } from "./tenant-users.js";
 
 export async function registerTenantRoutes(app: FastifyInstance): Promise<void> {
+  await app.register(accountRoutes, { prefix: "/account" });
+  await app.register(tenantUserRoutes, { prefix: "/team" });
   await app.register(billingRoutes, { prefix: "/billing" });
   await app.register(inventoryRoutes, { prefix: "/inventory" });
   await app.register(posRoutes, { prefix: "/pos" });

@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { publicApiFetch } from "@/lib/public-api";
+import { useSessionStore } from "@/stores/session-store";
 
 interface PublicPlan {
   id: string;
@@ -37,6 +38,7 @@ interface PlansResponse {
 }
 
 export function LandingPage(): ReactElement {
+  const tenantId = useSessionStore((s) => s.tenantId);
   const plans = useQuery({
     queryKey: ["public-plans"],
     queryFn: () => publicApiFetch<PlansResponse>("/v1/public/plans"),
@@ -51,12 +53,20 @@ export function LandingPage(): ReactElement {
             <Button variant="ghost" size="sm" asChild>
               <Link to="/platform/login">Operators</Link>
             </Button>
-            <Button variant="ghost" size="sm" asChild>
-              <Link to="/login">Sign in</Link>
-            </Button>
-            <Button size="sm" asChild>
-              <Link to="/signup?plan=free">Start free</Link>
-            </Button>
+            {tenantId ? (
+              <Button size="sm" asChild>
+                <Link to="/app/dashboard">Open workspace</Link>
+              </Button>
+            ) : (
+              <>
+                <Button variant="ghost" size="sm" asChild>
+                  <Link to="/login">Sign in</Link>
+                </Button>
+                <Button size="sm" asChild>
+                  <Link to="/signup?plan=free">Start free</Link>
+                </Button>
+              </>
+            )}
           </div>
         </div>
       </header>

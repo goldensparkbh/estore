@@ -6,6 +6,7 @@ import { adminDownloadCsv } from "@/lib/admin-download";
 import {
   SUBSCRIPTION_STATUSES,
   type SubscriptionRow,
+  type SubscriptionStatus,
   inputClass,
   labelClass,
 } from "@/lib/platform-types";
@@ -294,7 +295,11 @@ function EditSubscriptionForm({
     <form className="space-y-3 pt-2" onSubmit={handleSubmit}>
       <label className="block text-sm">
         <span className={labelClass}>Status</span>
-        <select className={inputClass} value={status} onChange={(e) => setStatus(e.target.value)}>
+        <select
+          className={inputClass}
+          value={status}
+          onChange={(e) => setStatus(e.target.value as SubscriptionStatus)}
+        >
           {SUBSCRIPTION_STATUSES.map((s) => (
             <option key={s} value={s}>
               {s}

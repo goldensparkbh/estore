@@ -3,7 +3,12 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { adminApiFetch } from "@/lib/admin-api";
 import { adminDownloadCsv } from "@/lib/admin-download";
-import type { PlanFeatures, PlatformPlan } from "@/lib/platform-types";
+import type { PlanFeatures, PlatformPlan as BasePlatformPlan } from "@/lib/platform-types";
+
+interface PlatformPlan extends BasePlatformPlan {
+  stripePriceIdMonthly: string | null;
+  stripePriceIdAnnual: string | null;
+}
 import { inputClass, labelClass } from "@/lib/platform-types";
 import { PageHeader } from "@/components/platform/page-header";
 import { Button } from "@/components/ui/button";
@@ -126,6 +131,30 @@ export function PlatformPlansPage(): ReactElement {
                   .join(", ") || "None"}
               </li>
               <li>{plan.subscriptionCount} subscription(s)</li>
+              {!plan.isFreeTier && (
+                <li>
+                  Stripe:{" "}
+                  <span
+                    className={
+                      plan.stripePriceIdMonthly
+                        ? "text-emerald-400"
+                        : "text-amber-400"
+                    }
+                  >
+                    monthly {plan.stripePriceIdMonthly ? "✓" : "✗"}
+                  </span>{" "}
+                  ·{" "}
+                  <span
+                    className={
+                      plan.stripePriceIdAnnual
+                        ? "text-emerald-400"
+                        : "text-amber-400"
+                    }
+                  >
+                    annual {plan.stripePriceIdAnnual ? "✓" : "✗"}
+                  </span>
+                </li>
+              )}
             </ul>
             <div className="mt-4 flex gap-2">
               <Button size="sm" variant="subtle" type="button" onClick={() => setEditor(plan)}>
@@ -189,6 +218,8 @@ function PlanForm({
   const [trialDays, setTrialDays] = useState(String(initial?.trialDays ?? 0));
   const [sortOrder, setSortOrder] = useState(String(initial?.sortOrder ?? 0));
   const [features, setFeatures] = useState<PlanFeatures>(initial?.features ?? defaultFeatures);
+  const [stripeMonthly, setStripeMonthly] = useState(initial?.stripePriceIdMonthly ?? "");
+  const [stripeAnnual, setStripeAnnual] = useState(initial?.stripePriceIdAnnual ?? "");
 
   const handleSubmit = (e: FormEvent): void => {
     e.preventDefault();
@@ -205,6 +236,8 @@ function PlanForm({
       sortOrder: Number(sortOrder),
       features,
       isActive: true,
+      stripePriceIdMonthly: stripeMonthly.trim() || null,
+      stripePriceIdAnnual: stripeAnnual.trim() || null,
     });
   };
 
@@ -345,6 +378,35 @@ function PlanForm({
           />
         </label>
       </div>
+      <fieldset className="rounded-lg border border-border p-3 text-sm">
+        <legend className="px-1 text-xs font-medium text-muted-foreground">
+          Stripe price IDs (paid plans)
+        </legend>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <label className="block text-sm">
+            <span className={labelClass}>Monthly price id</span>
+            <input
+              className={`${inputClass} font-mono`}
+              placeholder="price_..."
+              value={stripeMonthly}
+              onChange={(e) => setStripeMonthly(e.target.value)}
+            />
+          </label>
+          <label className="block text-sm">
+            <span className={labelClass}>Annual price id</span>
+            <input
+              className={`${inputClass} font-mono`}
+              placeholder="price_..."
+              value={stripeAnnual}
+              onChange={(e) => setStripeAnnual(e.target.value)}
+            />
+          </label>
+        </div>
+        <p className="mt-2 text-[11px] text-muted-foreground">
+          Create products & recurring prices in Stripe, then paste their IDs here so
+          tenants can subscribe via Checkout.
+        </p>
+      </fieldset>
       <Button type="submit" disabled={pending} className="w-full">
         {pending ? "Saving…" : initial ? "Update plan" : "Create plan"}
       </Button>

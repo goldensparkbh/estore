@@ -107,6 +107,40 @@ export const inventoryRoutes: FastifyPluginAsync = async (app) => {
     return { data: created };
   });
 
+  app.patch("/warehouses/:id", async (request) => {
+    const ctx = requireCtx(request);
+    const p = z.object({ id: z.string().uuid() }).parse(request.params);
+    const body = parseBody(createWarehouse.partial(), request.body);
+    const existing = await prisma.warehouse.findFirst({
+      where: { id: p.id, tenantId: ctx.tenantId },
+    });
+    if (!existing) throw new AppError(404, "Not found", "Warehouse not found.");
+    const updated = await prisma.warehouse.update({
+      where: { id: existing.id },
+      data: body,
+    });
+    return { data: updated };
+  });
+
+  app.delete("/warehouses/:id", async (request) => {
+    const ctx = requireCtx(request);
+    const p = z.object({ id: z.string().uuid() }).parse(request.params);
+    const existing = await prisma.warehouse.findFirst({
+      where: { id: p.id, tenantId: ctx.tenantId },
+      include: { _count: { select: { stockBatches: true } } },
+    });
+    if (!existing) throw new AppError(404, "Not found", "Warehouse not found.");
+    if (existing._count.stockBatches > 0) {
+      throw new AppError(
+        409,
+        "Conflict",
+        "Warehouse still has stock batches. Transfer them out first.",
+      );
+    }
+    await prisma.warehouse.delete({ where: { id: existing.id } });
+    return { data: { id: existing.id, deleted: true } };
+  });
+
   app.get("/products", async (request) => {
     const { tenantId } = requireCtx(request);
     const rows = await prisma.product.findMany({
@@ -156,6 +190,52 @@ export const inventoryRoutes: FastifyPluginAsync = async (app) => {
     });
     void reply.code(201);
     return { data: created };
+  });
+
+  app.patch("/products/:id", async (request) => {
+    const ctx = requireCtx(request);
+    const p = z.object({ id: z.string().uuid() }).parse(request.params);
+    const body = parseBody(
+      createProduct
+        .partial()
+        .extend({ isActive: z.boolean().optional(), reorderPointQuantity: z.string().nullable().optional() }),
+      request.body,
+    );
+    const existing = await prisma.product.findFirst({
+      where: { id: p.id, tenantId: ctx.tenantId },
+    });
+    if (!existing) throw new AppError(404, "Not found", "Product not found.");
+    const updated = await prisma.product.update({
+      where: { id: existing.id },
+      data: {
+        sku: body.sku,
+        name: body.name,
+        description: body.description,
+        unitOfMeasure: body.unitOfMeasure,
+        defaultValuation: body.defaultValuation,
+        barcode: body.barcode,
+        isActive: body.isActive,
+        reorderPointQuantity:
+          body.reorderPointQuantity === null
+            ? null
+            : body.reorderPointQuantity ?? undefined,
+      },
+    });
+    return { data: updated };
+  });
+
+  app.delete("/products/:id", async (request) => {
+    const ctx = requireCtx(request);
+    const p = z.object({ id: z.string().uuid() }).parse(request.params);
+    const existing = await prisma.product.findFirst({
+      where: { id: p.id, tenantId: ctx.tenantId },
+    });
+    if (!existing) throw new AppError(404, "Not found", "Product not found.");
+    const updated = await prisma.product.update({
+      where: { id: existing.id },
+      data: { isActive: false },
+    });
+    return { data: { id: updated.id, deactivated: true } };
   });
 
   app.get("/stock-batches", async (request) => {
@@ -243,5 +323,168 @@ export const inventoryRoutes: FastifyPluginAsync = async (app) => {
       ip: request.ip,
     });
     return { data: result };
+  });
+
+  app.get("/reorder-rules", async (request) => {
+    const ctx = requireCtx(request);
+    const rows = await prisma.reorderRule.findMany({
+      where: { tenantId: ctx.tenantId },
+      orderBy: [{ isActive: "desc" }, { lastTriggeredAt: "desc" }],
+      include: {
+        product: { select: { id: true, sku: true, name: true } },
+        warehouse: { select: { id: true, code: true, name: true } },
+      },
+    });
+
+    const onHandByPair = new Map<string, string>();
+    if (rows.length > 0) {
+      const sums = await prisma.stockBatch.groupBy({
+        by: ["productId", "warehouseId"],
+        where: {
+          tenantId: ctx.tenantId,
+          productId: { in: rows.map((r) => r.productId) },
+          warehouseId: { in: rows.map((r) => r.warehouseId) },
+        },
+        _sum: { quantityOnHand: true },
+      });
+      for (const s of sums) {
+        onHandByPair.set(
+          `${s.productId}::${s.warehouseId}`,
+          s._sum.quantityOnHand?.toString() ?? "0",
+        );
+      }
+    }
+
+    return {
+      data: rows.map((r) => ({
+        id: r.id,
+        product: r.product,
+        warehouse: r.warehouse,
+        minimumQuantity: r.minimumQuantity.toString(),
+        reorderQuantity: r.reorderQuantity.toString(),
+        isActive: r.isActive,
+        lastTriggeredAt: r.lastTriggeredAt?.toISOString() ?? null,
+        onHand: onHandByPair.get(`${r.productId}::${r.warehouseId}`) ?? "0",
+      })),
+    };
+  });
+
+  app.post("/reorder-rules", async (request, reply) => {
+    const ctx = requireCtx(request);
+    const body = parseBody(
+      z.object({
+        productId: z.string().uuid(),
+        warehouseId: z.string().uuid(),
+        minimumQuantity: z.string(),
+        reorderQuantity: z.string(),
+        isActive: z.boolean().optional(),
+      }),
+      request.body,
+    );
+    const created = await prisma.reorderRule.upsert({
+      where: {
+        tenantId_productId_warehouseId: {
+          tenantId: ctx.tenantId,
+          productId: body.productId,
+          warehouseId: body.warehouseId,
+        },
+      },
+      create: {
+        tenantId: ctx.tenantId,
+        productId: body.productId,
+        warehouseId: body.warehouseId,
+        minimumQuantity: body.minimumQuantity,
+        reorderQuantity: body.reorderQuantity,
+        isActive: body.isActive ?? true,
+      },
+      update: {
+        minimumQuantity: body.minimumQuantity,
+        reorderQuantity: body.reorderQuantity,
+        isActive: body.isActive ?? true,
+      },
+    });
+    void reply.code(201);
+    return { data: created };
+  });
+
+  app.patch("/reorder-rules/:id", async (request) => {
+    const ctx = requireCtx(request);
+    const p = z.object({ id: z.string().uuid() }).parse(request.params);
+    const body = parseBody(
+      z.object({
+        minimumQuantity: z.string().optional(),
+        reorderQuantity: z.string().optional(),
+        isActive: z.boolean().optional(),
+      }),
+      request.body,
+    );
+    const existing = await prisma.reorderRule.findFirst({
+      where: { id: p.id, tenantId: ctx.tenantId },
+    });
+    if (!existing) throw new AppError(404, "Not found", "Reorder rule not found.");
+    const updated = await prisma.reorderRule.update({
+      where: { id: existing.id },
+      data: body,
+    });
+    return { data: updated };
+  });
+
+  app.delete("/reorder-rules/:id", async (request) => {
+    const ctx = requireCtx(request);
+    const p = z.object({ id: z.string().uuid() }).parse(request.params);
+    const existing = await prisma.reorderRule.findFirst({
+      where: { id: p.id, tenantId: ctx.tenantId },
+    });
+    if (!existing) throw new AppError(404, "Not found", "Reorder rule not found.");
+    await prisma.reorderRule.delete({ where: { id: existing.id } });
+    return { data: { id: existing.id, deleted: true } };
+  });
+
+  app.get("/low-stock", async (request) => {
+    const ctx = requireCtx(request);
+    const rules = await prisma.reorderRule.findMany({
+      where: { tenantId: ctx.tenantId, isActive: true },
+      include: {
+        product: { select: { id: true, sku: true, name: true } },
+        warehouse: { select: { id: true, code: true, name: true } },
+      },
+    });
+    if (rules.length === 0) return { data: [] };
+
+    const sums = await prisma.stockBatch.groupBy({
+      by: ["productId", "warehouseId"],
+      where: {
+        tenantId: ctx.tenantId,
+        productId: { in: rules.map((r) => r.productId) },
+        warehouseId: { in: rules.map((r) => r.warehouseId) },
+      },
+      _sum: { quantityOnHand: true },
+    });
+
+    const onHand = new Map<string, number>();
+    for (const s of sums) {
+      onHand.set(
+        `${s.productId}::${s.warehouseId}`,
+        Number(s._sum.quantityOnHand?.toString() ?? "0"),
+      );
+    }
+
+    const alerts = rules
+      .map((r) => {
+        const have = onHand.get(`${r.productId}::${r.warehouseId}`) ?? 0;
+        const min = Number(r.minimumQuantity.toString());
+        return {
+          ruleId: r.id,
+          product: r.product,
+          warehouse: r.warehouse,
+          minimumQuantity: r.minimumQuantity.toString(),
+          reorderQuantity: r.reorderQuantity.toString(),
+          onHand: have.toString(),
+          isLow: have <= min,
+        };
+      })
+      .filter((a) => a.isLow);
+
+    return { data: alerts };
   });
 };

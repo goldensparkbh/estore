@@ -10,14 +10,16 @@ datasource db {
 // ——— Core ———
 
 model Tenant {
-  id               String   @id @default(uuid())
-  name             String
-  slug             String   @unique
-  timezone         String   @default("UTC")
-  baseCurrencyCode String   @default("USD")
-  isSuspended      Boolean  @default(false)
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  id                 String   @id @default(uuid())
+  name               String
+  slug               String   @unique
+  timezone           String   @default("UTC")
+  baseCurrencyCode   String   @default("USD")
+  isSuspended        Boolean  @default(false)
+  stripeCustomerId   String?  @unique
+  billingEmail       String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 
   users               User[]
   auditLogs           AuditLog[]
@@ -35,6 +37,8 @@ model Tenant {
   payrollRuns         PayrollRun[]
   reorderRules        ReorderRule[]
   tenantSubscriptions TenantSubscription[]
+  invoices            Invoice[]
+  passwordResets      PasswordReset[]
 }
 
 // ——— SaaS billing & platform ops ———
@@ -52,20 +56,22 @@ enum SubscriptionStatus {
 }
 
 model SubscriptionPlan {
-  id              String         @id @default(uuid())
-  name            String
-  slug            String         @unique
-  description     String?
-  billingInterval BillingInterval?
-  priceAmount     Decimal        @default(0) @db.Decimal(18, 4)
-  currencyCode    String         @default("USD")
-  isFreeTier      Boolean        @default(false)
-  trialDays       Int            @default(0)
-  features        Json
-  isActive        Boolean        @default(true)
-  sortOrder       Int            @default(0)
-  createdAt       DateTime       @default(now())
-  updatedAt       DateTime       @updatedAt
+  id                   String           @id @default(uuid())
+  name                 String
+  slug                 String           @unique
+  description          String?
+  billingInterval      BillingInterval?
+  priceAmount          Decimal          @default(0) @db.Decimal(18, 4)
+  currencyCode         String           @default("USD")
+  isFreeTier           Boolean          @default(false)
+  trialDays            Int              @default(0)
+  features             Json
+  isActive             Boolean          @default(true)
+  sortOrder            Int              @default(0)
+  stripePriceIdMonthly String?
+  stripePriceIdAnnual  String?
+  createdAt            DateTime         @default(now())
+  updatedAt            DateTime         @updatedAt
 
   subscriptions TenantSubscription[]
 
@@ -73,23 +79,63 @@ model SubscriptionPlan {
 }
 
 model TenantSubscription {
-  id                 String             @id @default(uuid())
-  tenantId           String
-  tenant             Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  planId             String
-  plan               SubscriptionPlan   @relation(fields: [planId], references: [id], onDelete: Restrict)
-  status             SubscriptionStatus @default(ACTIVE)
-  startedAt          DateTime           @default(now())
-  currentPeriodEnd   DateTime
-  cancelAtPeriodEnd  Boolean            @default(false)
-  externalRef        String?
-  createdAt          DateTime           @default(now())
-  updatedAt          DateTime           @updatedAt
+  id                   String             @id @default(uuid())
+  tenantId             String
+  tenant               Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  planId               String
+  plan                 SubscriptionPlan   @relation(fields: [planId], references: [id], onDelete: Restrict)
+  status               SubscriptionStatus @default(ACTIVE)
+  startedAt            DateTime           @default(now())
+  currentPeriodEnd     DateTime
+  cancelAtPeriodEnd    Boolean            @default(false)
+  externalRef          String?
+  stripeSubscriptionId String?            @unique
+  stripePriceId        String?
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
 
   reminders SubscriptionReminder[]
+  invoices  Invoice[]
 
   @@index([tenantId, status])
   @@index([currentPeriodEnd, status])
+}
+
+model Invoice {
+  id                   String             @id @default(uuid())
+  tenantId             String
+  tenant               Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  subscriptionId       String?
+  subscription         TenantSubscription? @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
+  stripeInvoiceId      String?            @unique
+  number               String?
+  status               String             @default("draft")
+  amountDue            Decimal            @db.Decimal(18, 4)
+  amountPaid           Decimal            @default(0) @db.Decimal(18, 4)
+  currencyCode         String
+  hostedInvoiceUrl     String?
+  invoicePdfUrl        String?
+  periodStart          DateTime?
+  periodEnd            DateTime?
+  issuedAt             DateTime           @default(now())
+  paidAt               DateTime?
+
+  @@index([tenantId, issuedAt])
+  @@index([subscriptionId])
+}
+
+model PasswordReset {
+  id        String   @id @default(uuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  userId    String
+  tokenHash String   @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+
+  @@index([tenantId, userId])
+  @@index([expiresAt])
 }
 
 model SubscriptionReminder {

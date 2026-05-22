@@ -8,6 +8,7 @@ import {
   LayoutDashboard,
   Receipt,
   Settings,
+  UserCircle,
   Users,
 } from "lucide-react";
 import { Command } from "cmdk";
@@ -20,8 +21,10 @@ const items: { label: string; path: string; icon: typeof LayoutDashboard }[] = [
   { label: "Point of Sale", path: "/app/pos", icon: CreditCard },
   { label: "HR & payroll", path: "/app/hr", icon: Users },
   { label: "Billing & subscription", path: "/app/billing", icon: Receipt },
+  { label: "Team & roles", path: "/app/team", icon: Users },
+  { label: "Account & workspace", path: "/app/account", icon: UserCircle },
   { label: "Reference · currencies", path: "/app/reference", icon: Building2 },
-  { label: "Session & tenant headers", path: "/app/session", icon: Settings },
+  { label: "Dev session headers", path: "/app/session", icon: Settings },
 ];
 
 export function CommandPalette(): ReactElement {

@@ -22,6 +22,31 @@ services:
       - key: DATABASE_URL
         scope: RUN_AND_BUILD_TIME
         type: SECRET
+      # Public app URL used for Stripe redirects and password reset emails
+      - key: PUBLIC_APP_URL
+        scope: RUN_AND_BUILD_TIME
+        value: https://YOUR-APP-DOMAIN.ondigitalocean.app
+      # Stripe (leave unset to disable paid checkout — free plans still work)
+      - key: STRIPE_SECRET_KEY
+        scope: RUN_AND_BUILD_TIME
+        type: SECRET
+      - key: STRIPE_WEBHOOK_SECRET
+        scope: RUN_AND_BUILD_TIME
+        type: SECRET
+      # Transactional email (Resend) for reminders & password resets
+      - key: RESEND_API_KEY
+        scope: RUN_AND_BUILD_TIME
+        type: SECRET
+      - key: PLATFORM_EMAIL_FROM
+        scope: RUN_AND_BUILD_TIME
+        value: ERP Platform <noreply@yourdomain.com>
+      # Bootstraps a platform admin during first seed
+      - key: SEED_PLATFORM_ADMIN_EMAIL
+        scope: RUN_AND_BUILD_TIME
+        type: SECRET
+      - key: SEED_PLATFORM_ADMIN_PASSWORD
+        scope: RUN_AND_BUILD_TIME
+        type: SECRET
 
 static_sites:
   - name: web

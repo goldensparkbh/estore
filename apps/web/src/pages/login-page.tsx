@@ -108,12 +108,23 @@ export function LoginPage(): ReactElement {
           <Button type="submit" className="w-full" disabled={pending}>
             Continue
           </Button>
-          <p className="text-center text-xs text-muted-foreground">
-            No workspace?{" "}
-            <Link to="/signup" className="text-primary underline-offset-4 hover:underline">
-              Create one
+          <div className="flex items-center justify-between text-xs text-muted-foreground">
+            <Link
+              to="/forgot-password"
+              className="text-primary underline-offset-4 hover:underline"
+            >
+              Forgot password?
             </Link>
-          </p>
+            <span>
+              No workspace?{" "}
+              <Link
+                to="/signup"
+                className="text-primary underline-offset-4 hover:underline"
+              >
+                Create one
+              </Link>
+            </span>
+          </div>
         </form>
       </div>
     </div>

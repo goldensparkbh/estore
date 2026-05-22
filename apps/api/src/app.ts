@@ -8,6 +8,7 @@ import { attachPlatformAdmin } from "./middleware/platform-admin.js";
 import { registerTenantRoutes } from "./routes/index.js";
 import { publicRoutes } from "./routes/public.js";
 import { adminRoutes } from "./routes/admin.js";
+import { stripeWebhookRoutes } from "./routes/webhooks.js";
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
@@ -18,7 +19,31 @@ export async function buildApp(): Promise<FastifyInstance> {
 
   await app.register(cors, { origin: true });
 
+  // Capture raw body so Stripe webhook signature verification works.
+  app.addContentTypeParser(
+    "application/json",
+    { parseAs: "buffer" },
+    (req, body, done) => {
+      const buffer = body as Buffer;
+      const url = req.url ?? "";
+      if (url.startsWith("/v1/webhooks/")) {
+        (req as unknown as { rawBody?: Buffer }).rawBody = buffer;
+      }
+      if (buffer.length === 0) {
+        done(null, undefined);
+        return;
+      }
+      try {
+        done(null, JSON.parse(buffer.toString("utf8")));
+      } catch (err) {
+        done(err as Error);
+      }
+    },
+  );
+
   app.get("/health", async () => ({ ok: true }));
+
+  await app.register(stripeWebhookRoutes, { prefix: "/v1/webhooks" });
 
   await app.register(publicRoutes, { prefix: "/v1/public" });
 

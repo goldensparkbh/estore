@@ -140,7 +140,7 @@ describe("tenant-users routes", () => {
       role: "ADMIN",
     } as never);
     vi.mocked(prisma.user.findFirst).mockResolvedValue(null);
-    vi.mocked(prisma.user.create).mockImplementation((args) =>
+    vi.mocked(prisma.user.create).mockImplementation((args: Parameters<typeof prisma.user.create>[0]) =>
       Promise.resolve({
         id: "00000000-0000-4000-8000-000000000031",
         email: args.data.email as string,

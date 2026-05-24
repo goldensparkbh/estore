@@ -92,7 +92,7 @@ describe("upsertSubscriptionFromStripe", () => {
       id: "plan_1",
     } as never);
     vi.mocked(prisma.tenantSubscription.findUnique).mockResolvedValue(null);
-    vi.mocked(prisma.$transaction).mockImplementation(async (fn) =>
+    vi.mocked(prisma.$transaction).mockImplementation(async (fn: (tx: unknown) => Promise<unknown>) =>
       fn({
         tenantSubscription: {
           updateMany: vi.fn(),

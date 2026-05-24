@@ -240,6 +240,10 @@ export const inventoryRoutes: FastifyPluginAsync = async (app) => {
           isActive: z.boolean().optional(),
           reorderPointQuantity: z.string().nullable().optional(),
           imageUrl: z.string().nullable().optional(),
+          retailPrice: z.string().nullable().optional(),
+          description: z.string().nullable().optional(),
+          category: z.string().nullable().optional(),
+          barcode: z.string().nullable().optional(),
         }),
       request.body,
     );
@@ -250,21 +254,33 @@ export const inventoryRoutes: FastifyPluginAsync = async (app) => {
     const updated = await prisma.product.update({
       where: { id: existing.id },
       data: {
-        sku: body.sku,
-        name: body.name,
-        description: body.description,
-        category: body.category,
-        unitOfMeasure: body.unitOfMeasure,
-        defaultValuation: body.defaultValuation,
-        barcode: body.barcode,
-        retailPrice: body.retailPrice,
-        showInStore: body.showInStore,
-        imageUrl: body.imageUrl === null ? null : body.imageUrl,
-        isActive: body.isActive,
-        reorderPointQuantity:
-          body.reorderPointQuantity === null
-            ? null
-            : body.reorderPointQuantity ?? undefined,
+        ...(body.sku !== undefined ? { sku: body.sku } : {}),
+        ...(body.name !== undefined ? { name: body.name } : {}),
+        ...(body.description !== undefined
+          ? { description: body.description === null ? null : body.description }
+          : {}),
+        ...(body.category !== undefined
+          ? { category: body.category === null ? null : body.category }
+          : {}),
+        ...(body.unitOfMeasure !== undefined ? { unitOfMeasure: body.unitOfMeasure } : {}),
+        ...(body.defaultValuation !== undefined ? { defaultValuation: body.defaultValuation } : {}),
+        ...(body.barcode !== undefined
+          ? { barcode: body.barcode === null ? null : body.barcode }
+          : {}),
+        ...(body.retailPrice !== undefined
+          ? { retailPrice: body.retailPrice === null ? null : body.retailPrice }
+          : {}),
+        ...(body.showInStore !== undefined ? { showInStore: body.showInStore } : {}),
+        ...(body.imageUrl !== undefined
+          ? { imageUrl: body.imageUrl === null ? null : body.imageUrl }
+          : {}),
+        ...(body.isActive !== undefined ? { isActive: body.isActive } : {}),
+        ...(body.reorderPointQuantity !== undefined
+          ? {
+              reorderPointQuantity:
+                body.reorderPointQuantity === null ? null : body.reorderPointQuantity,
+            }
+          : {}),
       },
     });
     await writeAuditLog({

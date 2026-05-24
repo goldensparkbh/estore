@@ -1,5 +1,5 @@
 import type { ChangeEvent, FormEvent, ReactElement } from "react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AlertTriangle,
@@ -488,6 +488,22 @@ function WarehouseDialog(props: {
   const [addressLine, setAddressLine] = useState(initial?.addressLine ?? "");
   const [isVirtual, setIsVirtual] = useState(initial?.isVirtual ?? false);
 
+  useEffect(() => {
+    if (props.value === null) return;
+    if (props.value === "new") {
+      setName("");
+      setCode("");
+      setAddressLine("");
+      setIsVirtual(false);
+      return;
+    }
+    const w = props.value;
+    setName(w.name);
+    setCode(w.code);
+    setAddressLine(w.addressLine ?? "");
+    setIsVirtual(w.isVirtual);
+  }, [props.value]);
+
   const mut = useMutation({
     mutationFn: (body: Record<string, unknown>) =>
       isNew
@@ -715,6 +731,32 @@ function ProductDialog(props: {
     initial?.defaultValuation ?? "FIFO",
   );
 
+  useEffect(() => {
+    if (props.value === null) return;
+    if (props.value === "new") {
+      setSku("");
+      setName("");
+      setDescription("");
+      setBarcode("");
+      setCategory("");
+      setRetailPrice("");
+      setShowInStore(false);
+      setImagePreview(null);
+      setValuation("FIFO");
+      return;
+    }
+    const p = props.value;
+    setSku(p.sku);
+    setName(p.name);
+    setDescription(p.description ?? "");
+    setBarcode(p.barcode ?? "");
+    setCategory(p.category ?? "");
+    setRetailPrice(p.retailPrice ?? "");
+    setShowInStore(p.showInStore);
+    setImagePreview(p.imageUrl);
+    setValuation(p.defaultValuation);
+  }, [props.value]);
+
   const imageMut = useMutation({
     mutationFn: (vars: { id: string; dataUrl: string }) =>
       apiFetch(`/v1/inventory/products/${vars.id}/image`, {
@@ -750,12 +792,12 @@ function ProductDialog(props: {
   const onSubmit = (e: FormEvent): void => {
     e.preventDefault();
     mut.mutate({
-      sku,
-      name,
-      description: description || undefined,
-      category: category || undefined,
-      barcode: barcode || undefined,
-      retailPrice: retailPrice || undefined,
+      sku: sku.trim(),
+      name: name.trim(),
+      description: description.trim() || null,
+      category: category.trim() || null,
+      barcode: barcode.trim() || null,
+      retailPrice: retailPrice.trim() || null,
       showInStore,
       defaultValuation: valuation,
     });

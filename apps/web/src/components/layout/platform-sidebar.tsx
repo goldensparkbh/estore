@@ -8,6 +8,7 @@ import {
   Layers,
   LogOut,
   Mail,
+  ShoppingBag,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -18,6 +19,7 @@ const nav = [
   { to: "/platform/tenants", label: "Tenants", icon: Building2 },
   { to: "/platform/subscriptions", label: "Subscriptions", icon: CreditCard },
   { to: "/platform/plans", label: "Plans", icon: Layers },
+  { to: "/platform/marketplace", label: "Marketplace", icon: ShoppingBag },
   { to: "/platform/audit", label: "Activity", icon: ClipboardList },
   { to: "/platform/settings", label: "Email", icon: Mail },
 ];

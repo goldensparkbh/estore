@@ -33,6 +33,13 @@ services:
       - key: STRIPE_WEBHOOK_SECRET
         scope: RUN_AND_BUILD_TIME
         type: SECRET
+      # TAP Payments — online store checkout & marketplace splits
+      - key: TAP_SECRET_KEY
+        scope: RUN_AND_BUILD_TIME
+        type: SECRET
+      - key: TAP_WEBHOOK_SECRET
+        scope: RUN_AND_BUILD_TIME
+        type: SECRET
       # Transactional email (Resend) for reminders & password resets
       - key: RESEND_API_KEY
         scope: RUN_AND_BUILD_TIME

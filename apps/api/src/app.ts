@@ -9,6 +9,7 @@ import { registerTenantRoutes } from "./routes/index.js";
 import { publicRoutes } from "./routes/public.js";
 import { adminRoutes } from "./routes/admin.js";
 import { stripeWebhookRoutes } from "./routes/webhooks.js";
+import { tapWebhookRoutes } from "./routes/tap-webhooks.js";
 import { storeRoutes } from "./routes/store.js";
 import { filesRoutes } from "./routes/files.js";
 import { startLowStockScheduler } from "./jobs/low-stock-alerts.js";
@@ -47,6 +48,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   app.get("/health", async () => ({ ok: true }));
 
   await app.register(stripeWebhookRoutes, { prefix: "/v1/webhooks" });
+  await app.register(tapWebhookRoutes, { prefix: "/v1/webhooks" });
 
   await app.register(storeRoutes, { prefix: "/v1/store" });
   await app.register(filesRoutes, { prefix: "/v1/files" });

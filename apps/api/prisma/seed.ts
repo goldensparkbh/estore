@@ -194,6 +194,16 @@ async function main(): Promise<void> {
     update: {},
   });
 
+  await prisma.platformMarketplaceSettings.upsert({
+    where: { id: "golden-spark" },
+    create: {
+      platformName: "Golden Spark",
+      defaultCommissionRate: "5",
+      estimatedTapFeeRate: "2.9",
+    },
+    update: {},
+  });
+
   // eslint-disable-next-line no-console -- seed script
   console.info("Seed OK. Demo tenant slug: demo | Tenant ID:", tenant.id, "| User ID:", user.id);
 }

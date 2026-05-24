@@ -43,6 +43,8 @@ export const accountRoutes: FastifyPluginAsync = async (app) => {
             storeEnabled: true,
             storeHeadline: true,
             storeLogoUrl: true,
+            tapDestinationId: true,
+            marketplaceCommissionRate: true,
           },
         },
       },
@@ -128,6 +130,8 @@ export const accountRoutes: FastifyPluginAsync = async (app) => {
         storeEnabled: z.boolean().optional(),
         storeHeadline: z.string().max(240).nullable().optional(),
         storeLogoUrl: z.string().url().nullable().optional(),
+        tapDestinationId: z.string().max(120).nullable().optional(),
+        marketplaceCommissionRate: z.string().nullable().optional(),
       }),
       request.body,
     );
@@ -147,6 +151,11 @@ export const accountRoutes: FastifyPluginAsync = async (app) => {
         storeEnabled: body.storeEnabled,
         storeHeadline: body.storeHeadline === null ? null : body.storeHeadline,
         storeLogoUrl: body.storeLogoUrl === null ? null : body.storeLogoUrl,
+        tapDestinationId: body.tapDestinationId === null ? null : body.tapDestinationId,
+        marketplaceCommissionRate:
+          body.marketplaceCommissionRate === null
+            ? null
+            : body.marketplaceCommissionRate,
       },
       select: {
         id: true,
@@ -158,6 +167,8 @@ export const accountRoutes: FastifyPluginAsync = async (app) => {
         storeEnabled: true,
         storeHeadline: true,
         storeLogoUrl: true,
+        tapDestinationId: true,
+        marketplaceCommissionRate: true,
       },
     });
     return { data: updated };

@@ -21,6 +21,8 @@ model Tenant {
   storeEnabled       Boolean  @default(false)
   storeHeadline      String?
   storeLogoUrl       String?
+  tapDestinationId   String?
+  marketplaceCommissionRate Decimal? @db.Decimal(9, 4)
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
@@ -31,6 +33,7 @@ model Tenant {
   stockBatches        StockBatch[]
   stockMovements      StockMovement[]
   sales               Sale[]
+  marketplaceOrders   MarketplaceOrder[]
   departments         Department[]
   employees           Employee[]
   shifts              Shift[]
@@ -430,6 +433,7 @@ model Sale {
 
   lines    SaleLine[]
   payments SalePayment[]
+  marketplaceOrder MarketplaceOrder?
 
   @@unique([tenantId, receiptNumber])
   @@index([tenantId, createdAt])
@@ -469,6 +473,88 @@ model SalePayment {
   reference    String?
 
   @@index([saleId])
+}
+
+// ——— Marketplace (TAP split payments) ———
+
+enum MarketplacePaymentStatus {
+  PENDING
+  INITIATED
+  AUTHORIZED
+  CAPTURED
+  FAILED
+  CANCELLED
+  REFUNDED
+  PARTIALLY_REFUNDED
+}
+
+model PlatformMarketplaceSettings {
+  id                      String   @id @default("golden-spark")
+  platformName            String   @default("Golden Spark")
+  defaultCommissionRate   Decimal  @default(5) @db.Decimal(9, 4)
+  estimatedTapFeeRate     Decimal  @default(2.9) @db.Decimal(9, 4)
+  updatedAt               DateTime @updatedAt
+}
+
+model MarketplaceOrder {
+  id                       String                   @id @default(uuid())
+  tenantId                 String
+  tenant                   Tenant                   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  orderNumber              String
+  customerName             String
+  customerEmail            String
+  status                   MarketplacePaymentStatus @default(PENDING)
+  currencyCode             String
+  grossAmount              Decimal                  @db.Decimal(18, 4)
+  tapFeeAmount             Decimal                  @default(0) @db.Decimal(18, 4)
+  platformCommissionAmount Decimal                  @default(0) @db.Decimal(18, 4)
+  tenantNetAmount          Decimal                  @default(0) @db.Decimal(18, 4)
+  commissionRateApplied    Decimal                  @db.Decimal(9, 4)
+  tapChargeId              String?                  @unique
+  tapChargeStatus          String?
+  tapRedirectUrl           String?
+  tapReference             String?
+  saleId                   String?                  @unique
+  sale                     Sale?                    @relation(fields: [saleId], references: [id], onDelete: SetNull)
+  lines                    MarketplaceOrderLine[]
+  events                   MarketplacePaymentEvent[]
+  createdAt                DateTime                 @default(now())
+  updatedAt                DateTime                 @updatedAt
+  capturedAt               DateTime?
+  refundedAt               DateTime?
+
+  @@unique([tenantId, orderNumber])
+  @@index([tenantId, status, createdAt])
+  @@index([tapChargeId])
+}
+
+model MarketplaceOrderLine {
+  id           String           @id @default(uuid())
+  orderId      String
+  order        MarketplaceOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId    String
+  sku          String
+  name         String
+  quantity     Decimal          @db.Decimal(18, 4)
+  unitPrice    Decimal          @db.Decimal(18, 4)
+  lineTotal    Decimal          @db.Decimal(18, 4)
+  currencyCode String
+
+  @@index([orderId])
+  @@index([productId])
+}
+
+model MarketplacePaymentEvent {
+  id        String                   @id @default(uuid())
+  orderId   String
+  order     MarketplaceOrder         @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  status    MarketplacePaymentStatus
+  tapEvent  String?
+  note      String?
+  payload   Json?
+  createdAt DateTime                 @default(now())
+
+  @@index([orderId, createdAt])
 }
 
 // ——— HR ———

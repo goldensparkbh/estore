@@ -36,7 +36,6 @@ export function StoreShopPage(): ReactElement {
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [customerName, setCustomerName] = useState("");
   const [customerEmail, setCustomerEmail] = useState("");
-  const [orderDone, setOrderDone] = useState<string | null>(null);
 
   const products = useQuery({
     queryKey: ["store-products", slug, search, category],
@@ -76,8 +75,8 @@ export function StoreShopPage(): ReactElement {
   );
 
   const checkout = useMutation({
-    mutationFn: () =>
-      fetch(`/v1/store/${slug}/orders`, {
+    mutationFn: async () => {
+      const res = await fetch(`/v1/store/${slug}/checkout`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
@@ -88,14 +87,23 @@ export function StoreShopPage(): ReactElement {
             quantity: String(l.quantity),
           })),
         }),
-      }).then(async (res) => {
-        if (!res.ok) throw new Error(`Checkout failed (${res.status})`);
-        return res.json() as Promise<{ data: { receiptNumber: string } }>;
-      }),
-    onSuccess: (res) => {
-      setOrderDone(res.data.receiptNumber);
-      setCart([]);
+      });
+      const body = (await res.json()) as {
+        detail?: string;
+        title?: string;
+        data?: { paymentUrl: string; order: { orderNumber: string } };
+      };
+      if (!res.ok) {
+        throw new Error(body.detail ?? body.title ?? `Checkout failed (${res.status})`);
+      }
+      if (!body.data?.paymentUrl) {
+        throw new Error("No payment URL returned from gateway.");
+      }
+      return body.data;
+    },
+    onSuccess: (data) => {
       setCheckoutOpen(false);
+      window.location.href = data.paymentUrl;
     },
   });
 
@@ -131,14 +139,6 @@ export function StoreShopPage(): ReactElement {
           )}
         </div>
       </header>
-
-      {orderDone && (
-        <div className="mx-auto max-w-6xl px-4 py-3">
-          <div className="rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-300">
-            Order placed! Reference: <strong>{orderDone}</strong>
-          </div>
-        </div>
-      )}
 
       <main className="mx-auto grid max-w-6xl gap-4 px-4 py-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
         {filtered.map((p) => (
@@ -252,10 +252,10 @@ export function StoreShopPage(): ReactElement {
             <Button
               className="w-full"
               type="button"
-              disabled={cart.length === 0 || checkout.isPending}
+              disabled={cart.length === 0 || checkout.isPending || !customerName || !customerEmail}
               onClick={() => checkout.mutate()}
             >
-              Place order
+              {checkout.isPending ? "Redirecting to payment…" : "Pay with card (TAP)"}
             </Button>
           </div>
         </div>

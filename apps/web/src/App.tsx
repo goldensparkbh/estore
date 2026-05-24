@@ -18,6 +18,7 @@ import { AccountPage } from "@/pages/account-page";
 import { TeamPage } from "@/pages/team-page";
 import { StoreLandingPage } from "@/pages/store-landing-page";
 import { StoreShopPage } from "@/pages/store-shop-page";
+import { StoreCheckoutReturnPage } from "@/pages/store-checkout-return-page";
 import { CheckoutReturnPage } from "@/pages/checkout-return-page";
 import { useSessionStore } from "@/stores/session-store";
 
@@ -32,6 +33,11 @@ const HrPage = lazy(() =>
 );
 const ReportsPage = lazy(() =>
   import("@/pages/reports-page").then((m) => ({ default: m.ReportsPage })),
+);
+const MarketplaceTransactionsPage = lazy(() =>
+  import("@/pages/marketplace-transactions-page").then((m) => ({
+    default: m.MarketplaceTransactionsPage,
+  })),
 );
 const AuditLogPage = lazy(() =>
   import("@/pages/audit-log-page").then((m) => ({ default: m.AuditLogPage })),
@@ -65,6 +71,11 @@ const PlatformTenantDetailPage = lazy(() =>
 const PlatformAuditPage = lazy(() =>
   import("@/pages/platform/platform-audit-page").then((m) => ({
     default: m.PlatformAuditPage,
+  })),
+);
+const PlatformMarketplacePage = lazy(() =>
+  import("@/pages/platform/platform-marketplace-page").then((m) => ({
+    default: m.PlatformMarketplacePage,
   })),
 );
 const PlatformSettingsPage = lazy(() =>
@@ -101,6 +112,7 @@ export function App(): ReactElement {
           <Route path="/reset-password" element={<ResetPasswordPage />} />
           <Route path="/store/:slug" element={<StoreLandingPage />} />
           <Route path="/store/:slug/shop" element={<StoreShopPage />} />
+          <Route path="/store/:slug/checkout/return" element={<StoreCheckoutReturnPage />} />
           <Route path="/platform/login" element={<PlatformLoginPage />} />
           <Route path="/platform" element={<RequirePlatformAdmin />}>
             <Route element={<PlatformShell />}>
@@ -110,6 +122,7 @@ export function App(): ReactElement {
               <Route path="subscriptions" element={<PlatformSubscriptionsPage />} />
               <Route path="plans" element={<PlatformPlansPage />} />
               <Route path="audit" element={<PlatformAuditPage />} />
+              <Route path="marketplace" element={<PlatformMarketplacePage />} />
               <Route path="settings" element={<PlatformSettingsPage />} />
             </Route>
           </Route>
@@ -121,6 +134,7 @@ export function App(): ReactElement {
               <Route path="pos" element={<PosPage />} />
               <Route path="hr" element={<HrPage />} />
               <Route path="reports" element={<ReportsPage />} />
+              <Route path="marketplace" element={<MarketplaceTransactionsPage />} />
               <Route path="audit" element={<AuditLogPage />} />
               <Route path="reference" element={<ReferencePage />} />
               <Route path="session" element={<SessionPage />} />

@@ -2,6 +2,12 @@ import type { FastifyPluginAsync } from "fastify";
 import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
 import { AppError } from "../lib/problem.js";
+import { tapConfigured } from "../services/tap.js";
+import {
+  createMarketplaceCheckout,
+  getMarketplaceOrder,
+  syncMarketplaceOrderFromTap,
+} from "../services/marketplace.js";
 
 export const storeRoutes: FastifyPluginAsync = async (app) => {
   app.get("/:slug", async (request) => {
@@ -103,8 +109,77 @@ export const storeRoutes: FastifyPluginAsync = async (app) => {
     };
   });
 
+  app.post("/:slug/checkout", async (request, reply) => {
+    const p = z.object({ slug: z.string().min(1) }).parse(request.params);
+    const body = z
+      .object({
+        customerName: z.string().min(1).max(120),
+        customerEmail: z.string().email(),
+        lines: z
+          .array(
+            z.object({
+              productId: z.string().uuid(),
+              quantity: z.string(),
+            }),
+          )
+          .min(1),
+      })
+      .parse(request.body);
+
+    if (!tapConfigured()) {
+      throw new AppError(
+        503,
+        "Payments unavailable",
+        "TAP payment gateway is not configured on this platform.",
+      );
+    }
+
+    const tenant = await prisma.tenant.findFirst({
+      where: { slug: p.slug, isSuspended: false, storeEnabled: true },
+    });
+    if (!tenant) throw new AppError(404, "Not Found", "Store not found.");
+
+    const result = await createMarketplaceCheckout({
+      tenantId: tenant.id,
+      tenantSlug: tenant.slug,
+      customerName: body.customerName,
+      customerEmail: body.customerEmail,
+      lines: body.lines,
+    });
+
+    void reply.code(201);
+    return { data: result };
+  });
+
+  app.get("/:slug/checkout/:orderId", async (request) => {
+    const p = z
+      .object({ slug: z.string().min(1), orderId: z.string().uuid() })
+      .parse(request.params);
+
+    const tenant = await prisma.tenant.findFirst({
+      where: { slug: p.slug, storeEnabled: true, isSuspended: false },
+    });
+    if (!tenant) throw new AppError(404, "Not Found", "Store not found.");
+
+    try {
+      await syncMarketplaceOrderFromTap(p.orderId);
+    } catch {
+      /* poll best-effort */
+    }
+
+    const order = await getMarketplaceOrder(p.orderId, tenant.id);
+    return { data: order };
+  });
+
   app.post("/:slug/orders", async (request, reply) => {
     const p = z.object({ slug: z.string().min(1) }).parse(request.params);
+    if (tapConfigured()) {
+      throw new AppError(
+        400,
+        "Use checkout",
+        "Paid store orders must use POST /v1/store/:slug/checkout with TAP.",
+      );
+    }
     const body = z
       .object({
         customerName: z.string().min(1).max(120),

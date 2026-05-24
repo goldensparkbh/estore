@@ -19,6 +19,8 @@ interface MeResponse {
       storeEnabled: boolean;
       storeHeadline: string | null;
       storeLogoUrl: string | null;
+      tapDestinationId: string | null;
+      marketplaceCommissionRate: string | null;
     };
   };
 }
@@ -36,6 +38,8 @@ export function AccountPage(): ReactElement {
   const [storeEnabled, setStoreEnabled] = useState(false);
   const [storeHeadline, setStoreHeadline] = useState("");
   const [storeLogoUrl, setStoreLogoUrl] = useState("");
+  const [tapDestinationId, setTapDestinationId] = useState("");
+  const [marketplaceCommissionRate, setMarketplaceCommissionRate] = useState("");
 
   const me = useQuery({
     queryKey: ["account-me"],
@@ -66,6 +70,8 @@ export function AccountPage(): ReactElement {
       setStoreEnabled(me.data.data.tenant.storeEnabled ?? false);
       setStoreHeadline(me.data.data.tenant.storeHeadline ?? "");
       setStoreLogoUrl(me.data.data.tenant.storeLogoUrl ?? "");
+      setTapDestinationId(me.data.data.tenant.tapDestinationId ?? "");
+      setMarketplaceCommissionRate(me.data.data.tenant.marketplaceCommissionRate ?? "");
     }
   }, [me.data?.data?.tenant]);
 
@@ -95,6 +101,8 @@ export function AccountPage(): ReactElement {
       storeEnabled?: boolean;
       storeHeadline?: string | null;
       storeLogoUrl?: string | null;
+      tapDestinationId?: string | null;
+      marketplaceCommissionRate?: string | null;
     }) =>
       apiFetch<{ data: unknown }>("/v1/account/tenant", {
         method: "PATCH",
@@ -131,6 +139,8 @@ export function AccountPage(): ReactElement {
       storeEnabled,
       storeHeadline: storeHeadline.trim() || null,
       storeLogoUrl: storeLogoUrl.trim() || null,
+      tapDestinationId: tapDestinationId.trim() || null,
+      marketplaceCommissionRate: marketplaceCommissionRate.trim() || null,
     });
   };
 
@@ -363,6 +373,32 @@ export function AccountPage(): ReactElement {
               onChange={(e) => setStoreLogoUrl(e.target.value)}
               disabled={!isAdminish}
               placeholder="https://…"
+            />
+          </div>
+          <div className="space-y-1">
+            <label className={labelClass} htmlFor="tap">TAP destination ID</label>
+            <input
+              id="tap"
+              className={inputClass}
+              value={tapDestinationId}
+              onChange={(e) => setTapDestinationId(e.target.value)}
+              disabled={!isAdminish}
+              placeholder="dest_… from TAP marketplace onboarding"
+            />
+            <p className="text-[10px] text-muted-foreground">
+              Required to accept card payments in your online store. Obtain this from your TAP
+              merchant / marketplace setup.
+            </p>
+          </div>
+          <div className="space-y-1">
+            <label className={labelClass} htmlFor="mcr">Custom commission % (optional)</label>
+            <input
+              id="mcr"
+              className={inputClass}
+              value={marketplaceCommissionRate}
+              onChange={(e) => setMarketplaceCommissionRate(e.target.value)}
+              disabled={!isAdminish}
+              placeholder="Leave blank for platform default"
             />
           </div>
           {storeEnabled && me.data?.data?.tenant?.slug && (

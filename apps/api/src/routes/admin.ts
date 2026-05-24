@@ -7,6 +7,7 @@ import { requirePlatformAdmin } from "../middleware/platform-admin.js";
 import { addBillingPeriod, changePlanForTenant, parsePlanFeatures } from "../services/billing.js";
 import { sendPlatformEmail } from "../services/email.js";
 import { adminPlatformRoutes } from "./admin-platform.js";
+import { adminMarketplaceRoutes } from "./admin-marketplace.js";
 
 function parseBody<T>(schema: z.ZodType<T>, body: unknown): T {
   const parsed = schema.safeParse(body);
@@ -135,6 +136,7 @@ function serializeSubscription(
 
 export const adminRoutes: FastifyPluginAsync = async (app) => {
   await app.register(adminPlatformRoutes);
+  await app.register(adminMarketplaceRoutes);
 
   app.get("/stats", async (request) => {
     requirePlatformAdmin(request);

@@ -1,7 +1,7 @@
 import type { FormEvent, ReactElement } from "react";
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { apiFetch } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { useSessionStore } from "@/stores/session-store";
@@ -16,6 +16,9 @@ interface MeResponse {
       timezone: string;
       baseCurrencyCode: string;
       billingEmail: string | null;
+      storeEnabled: boolean;
+      storeHeadline: string | null;
+      storeLogoUrl: string | null;
     };
   };
 }
@@ -29,6 +32,10 @@ export function AccountPage(): ReactElement {
   const navigate = useNavigate();
   const clearSession = useSessionStore((s) => s.clearSession);
   const setSession = useSessionStore((s) => s.setSession);
+
+  const [storeEnabled, setStoreEnabled] = useState(false);
+  const [storeHeadline, setStoreHeadline] = useState("");
+  const [storeLogoUrl, setStoreLogoUrl] = useState("");
 
   const me = useQuery({
     queryKey: ["account-me"],
@@ -56,6 +63,9 @@ export function AccountPage(): ReactElement {
       setTimezone(me.data.data.tenant.timezone);
       setCurrency(me.data.data.tenant.baseCurrencyCode);
       setBillingEmail(me.data.data.tenant.billingEmail ?? "");
+      setStoreEnabled(me.data.data.tenant.storeEnabled ?? false);
+      setStoreHeadline(me.data.data.tenant.storeHeadline ?? "");
+      setStoreLogoUrl(me.data.data.tenant.storeLogoUrl ?? "");
     }
   }, [me.data?.data?.tenant]);
 
@@ -82,6 +92,9 @@ export function AccountPage(): ReactElement {
       timezone?: string;
       baseCurrencyCode?: string;
       billingEmail?: string | null;
+      storeEnabled?: boolean;
+      storeHeadline?: string | null;
+      storeLogoUrl?: string | null;
     }) =>
       apiFetch<{ data: unknown }>("/v1/account/tenant", {
         method: "PATCH",
@@ -115,6 +128,9 @@ export function AccountPage(): ReactElement {
       timezone,
       baseCurrencyCode: currency,
       billingEmail: billingEmail.trim() ? billingEmail.trim() : null,
+      storeEnabled,
+      storeHeadline: storeHeadline.trim() || null,
+      storeLogoUrl: storeLogoUrl.trim() || null,
     });
   };
 
@@ -315,6 +331,54 @@ export function AccountPage(): ReactElement {
               placeholder="finance@example.com"
             />
           </div>
+        </div>
+        <div className="rounded-lg border border-border bg-muted/20 p-4 space-y-3">
+          <h3 className="text-sm font-medium">Online store</h3>
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={storeEnabled}
+              onChange={(e) => setStoreEnabled(e.target.checked)}
+              disabled={!isAdminish}
+            />
+            Enable public online store
+          </label>
+          <div className="space-y-1">
+            <label className={labelClass} htmlFor="sh">Store headline</label>
+            <input
+              id="sh"
+              className={inputClass}
+              value={storeHeadline}
+              onChange={(e) => setStoreHeadline(e.target.value)}
+              disabled={!isAdminish}
+              placeholder="Quality goods delivered fast"
+            />
+          </div>
+          <div className="space-y-1">
+            <label className={labelClass} htmlFor="sl">Logo URL (optional)</label>
+            <input
+              id="sl"
+              className={inputClass}
+              value={storeLogoUrl}
+              onChange={(e) => setStoreLogoUrl(e.target.value)}
+              disabled={!isAdminish}
+              placeholder="https://…"
+            />
+          </div>
+          {storeEnabled && me.data?.data?.tenant?.slug && (
+            <p className="text-xs text-muted-foreground">
+              Your store:{" "}
+              <Link
+                className="text-primary hover:underline"
+                to={`/store/${me.data.data.tenant.slug}`}
+                target="_blank"
+              >
+                /store/{me.data.data.tenant.slug}
+              </Link>
+              {" · "}
+              Mark products with “Show in online store” in Inventory.
+            </p>
+          )}
         </div>
         {!isAdminish && (
           <p className="text-xs text-muted-foreground">

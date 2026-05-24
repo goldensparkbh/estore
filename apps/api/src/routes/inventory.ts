@@ -5,6 +5,38 @@ import { AppError } from "../lib/problem.js";
 import { requireCtx } from "../middleware/tenant.js";
 import { adjustStock, receiveStock, transferStock } from "../services/inventory.js";
 import { getCurrentSubscription, parsePlanFeatures } from "../services/billing.js";
+import { writeAuditLog } from "../services/audit.js";
+import { parseDataUrl, saveProductImage } from "../lib/storage.js";
+
+function serializeProduct(p: {
+  id: string;
+  sku: string;
+  name: string;
+  description: string | null;
+  category: string | null;
+  barcode: string | null;
+  defaultValuation: string;
+  isActive: boolean;
+  retailPrice: { toString(): string } | null;
+  imageUrl: string | null;
+  showInStore: boolean;
+  reorderPointQuantity: { toString(): string } | null;
+}) {
+  return {
+    id: p.id,
+    sku: p.sku,
+    name: p.name,
+    description: p.description,
+    category: p.category,
+    barcode: p.barcode,
+    defaultValuation: p.defaultValuation,
+    isActive: p.isActive,
+    retailPrice: p.retailPrice?.toString() ?? null,
+    imageUrl: p.imageUrl,
+    showInStore: p.showInStore,
+    reorderPointQuantity: p.reorderPointQuantity?.toString() ?? null,
+  };
+}
 
 const createWarehouse = z.object({
   name: z.string().min(1),
@@ -17,9 +49,12 @@ const createProduct = z.object({
   sku: z.string().min(1),
   name: z.string().min(1),
   description: z.string().optional(),
+  category: z.string().optional(),
   unitOfMeasure: z.string().optional(),
   defaultValuation: z.enum(["FIFO", "LIFO"]).optional(),
   barcode: z.string().optional(),
+  retailPrice: z.string().optional(),
+  showInStore: z.boolean().optional(),
 });
 
 const receive = z.object({
@@ -147,27 +182,18 @@ export const inventoryRoutes: FastifyPluginAsync = async (app) => {
       where: { tenantId },
       orderBy: { name: "asc" },
     });
-    const data = rows.map((p) => ({
-      id: p.id,
-      sku: p.sku,
-      name: p.name,
-      description: p.description,
-      barcode: p.barcode,
-      defaultValuation: p.defaultValuation,
-      isActive: p.isActive,
-      reorderPointQuantity: p.reorderPointQuantity?.toString() ?? null,
-    }));
+    const data = rows.map((p) => serializeProduct(p));
     return { data };
   });
 
   app.post("/products", async (request, reply) => {
     const body = parseBody(createProduct, request.body);
-    const { tenantId } = requireCtx(request);
-    const sub = await getCurrentSubscription(tenantId);
+    const ctx = requireCtx(request);
+    const sub = await getCurrentSubscription(ctx.tenantId);
     if (sub) {
       const features = parsePlanFeatures(sub.plan.features);
       if (features.maxProducts != null) {
-        const count = await prisma.product.count({ where: { tenantId } });
+        const count = await prisma.product.count({ where: { tenantId: ctx.tenantId } });
         if (count >= features.maxProducts) {
           throw new AppError(
             403,
@@ -179,17 +205,29 @@ export const inventoryRoutes: FastifyPluginAsync = async (app) => {
     }
     const created = await prisma.product.create({
       data: {
-        tenantId,
+        tenantId: ctx.tenantId,
         sku: body.sku,
         name: body.name,
         description: body.description,
+        category: body.category,
         unitOfMeasure: body.unitOfMeasure ?? "EA",
         defaultValuation: body.defaultValuation ?? "FIFO",
         barcode: body.barcode,
+        retailPrice: body.retailPrice,
+        showInStore: body.showInStore ?? false,
       },
     });
+    await writeAuditLog({
+      tenantId: ctx.tenantId,
+      userId: ctx.userId,
+      action: "PRODUCT_CREATED",
+      entityName: "Product",
+      entityId: created.id,
+      newValues: { sku: created.sku, name: created.name },
+      ipAddress: request.ip,
+    });
     void reply.code(201);
-    return { data: created };
+    return { data: serializeProduct(created) };
   });
 
   app.patch("/products/:id", async (request) => {
@@ -198,7 +236,11 @@ export const inventoryRoutes: FastifyPluginAsync = async (app) => {
     const body = parseBody(
       createProduct
         .partial()
-        .extend({ isActive: z.boolean().optional(), reorderPointQuantity: z.string().nullable().optional() }),
+        .extend({
+          isActive: z.boolean().optional(),
+          reorderPointQuantity: z.string().nullable().optional(),
+          imageUrl: z.string().nullable().optional(),
+        }),
       request.body,
     );
     const existing = await prisma.product.findFirst({
@@ -211,9 +253,13 @@ export const inventoryRoutes: FastifyPluginAsync = async (app) => {
         sku: body.sku,
         name: body.name,
         description: body.description,
+        category: body.category,
         unitOfMeasure: body.unitOfMeasure,
         defaultValuation: body.defaultValuation,
         barcode: body.barcode,
+        retailPrice: body.retailPrice,
+        showInStore: body.showInStore,
+        imageUrl: body.imageUrl === null ? null : body.imageUrl,
         isActive: body.isActive,
         reorderPointQuantity:
           body.reorderPointQuantity === null
@@ -221,7 +267,46 @@ export const inventoryRoutes: FastifyPluginAsync = async (app) => {
             : body.reorderPointQuantity ?? undefined,
       },
     });
-    return { data: updated };
+    await writeAuditLog({
+      tenantId: ctx.tenantId,
+      userId: ctx.userId,
+      action: "PRODUCT_UPDATED",
+      entityName: "Product",
+      entityId: updated.id,
+      oldValues: { sku: existing.sku, showInStore: existing.showInStore },
+      newValues: { sku: updated.sku, showInStore: updated.showInStore },
+      ipAddress: request.ip,
+    });
+    return { data: serializeProduct(updated) };
+  });
+
+  app.post("/products/:id/image", async (request) => {
+    const ctx = requireCtx(request);
+    const p = z.object({ id: z.string().uuid() }).parse(request.params);
+    const body = parseBody(z.object({ dataUrl: z.string().min(20) }), request.body);
+    const existing = await prisma.product.findFirst({
+      where: { id: p.id, tenantId: ctx.tenantId },
+    });
+    if (!existing) throw new AppError(404, "Not found", "Product not found.");
+    const parsed = parseDataUrl(body.dataUrl);
+    if (!parsed) throw new AppError(400, "Invalid image", "Expected a base64 data URL.");
+    if (parsed.buffer.length > 5 * 1024 * 1024) {
+      throw new AppError(400, "Too large", "Image must be under 5 MB.");
+    }
+    const imageUrl = await saveProductImage(ctx.tenantId, existing.id, parsed.buffer, parsed.mimeType);
+    const updated = await prisma.product.update({
+      where: { id: existing.id },
+      data: { imageUrl },
+    });
+    await writeAuditLog({
+      tenantId: ctx.tenantId,
+      userId: ctx.userId,
+      action: "PRODUCT_IMAGE_UPDATED",
+      entityName: "Product",
+      entityId: updated.id,
+      ipAddress: request.ip,
+    });
+    return { data: { id: updated.id, imageUrl: updated.imageUrl } };
   });
 
   app.delete("/products/:id", async (request) => {

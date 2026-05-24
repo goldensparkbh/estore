@@ -37,3 +37,43 @@ export async function recordSaleAnalytics(row: SalesAnalyticsRow): Promise<void>
     // Non-fatal: operational reporting still works via Postgres
   }
 }
+
+export interface DailySalesRow {
+  day: string;
+  total: string;
+  count: number;
+}
+
+export async function queryDailySales(
+  tenantId: string,
+  days: number,
+): Promise<DailySalesRow[]> {
+  const ch = getClickHouse();
+  if (!ch) return [];
+
+  try {
+    const result = await ch.query({
+      query: `
+        SELECT
+          toString(day) AS day,
+          sum(total_amount) AS total,
+          count() AS cnt
+        FROM events_sales_daily
+        WHERE tenant_id = {tenantId:UUID}
+          AND day >= today() - {days:UInt32}
+        GROUP BY day
+        ORDER BY day ASC
+      `,
+      query_params: { tenantId, days },
+      format: "JSONEachRow",
+    });
+    const rows = (await result.json()) as Array<{ day: string; total: string; cnt: string }>;
+    return rows.map((r) => ({
+      day: r.day,
+      total: String(r.total),
+      count: Number(r.cnt),
+    }));
+  } catch {
+    return [];
+  }
+}

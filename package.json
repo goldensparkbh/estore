@@ -10,8 +10,8 @@
     "build": "npm run db:generate && npm run build --workspaces --if-present",
     "postinstall": "npm run db:generate",
     "db:generate": "npx prisma generate --schema apps/api/prisma/schema.prisma",
-    "db:migrate": "npm -w @erp/api exec prisma migrate dev",
-    "db:push": "npm -w @erp/api exec prisma db push",
+    "db:migrate": "node --env-file=.env node_modules/prisma/build/index.js migrate dev --schema apps/api/prisma/schema.prisma",
+    "db:push": "node --env-file=.env node_modules/prisma/build/index.js db push --schema apps/api/prisma/schema.prisma",
     "db:seed": "node --env-file=.env --import tsx apps/api/prisma/seed.ts",
     "lint": "npm run lint --workspaces --if-present"
   },

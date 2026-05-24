@@ -1,0 +1,219 @@
+import type { FastifyPluginAsync } from "fastify";
+import { z } from "zod";
+import { prisma } from "../lib/prisma.js";
+import { AppError } from "../lib/problem.js";
+
+export const storeRoutes: FastifyPluginAsync = async (app) => {
+  app.get("/:slug", async (request) => {
+    const p = z.object({ slug: z.string().min(1) }).parse(request.params);
+    const tenant = await prisma.tenant.findFirst({
+      where: { slug: p.slug, isSuspended: false, storeEnabled: true },
+      select: {
+        id: true,
+        name: true,
+        slug: true,
+        storeHeadline: true,
+        storeLogoUrl: true,
+        baseCurrencyCode: true,
+      },
+    });
+    if (!tenant) throw new AppError(404, "Not Found", "Store not found.");
+    return { data: tenant };
+  });
+
+  app.get("/:slug/products", async (request) => {
+    const p = z.object({ slug: z.string().min(1) }).parse(request.params);
+    const q = z
+      .object({
+        category: z.string().optional(),
+        search: z.string().optional(),
+        limit: z.coerce.number().int().min(1).max(100).default(48),
+        offset: z.coerce.number().int().min(0).default(0),
+      })
+      .parse(request.query);
+
+    const tenant = await prisma.tenant.findFirst({
+      where: { slug: p.slug, isSuspended: false, storeEnabled: true },
+    });
+    if (!tenant) throw new AppError(404, "Not Found", "Store not found.");
+
+    const where = {
+      tenantId: tenant.id,
+      isActive: true,
+      showInStore: true,
+      ...(q.category ? { category: q.category } : {}),
+      ...(q.search
+        ? {
+            OR: [
+              { name: { contains: q.search, mode: "insensitive" as const } },
+              { sku: { contains: q.search, mode: "insensitive" as const } },
+              { description: { contains: q.search, mode: "insensitive" as const } },
+            ],
+          }
+        : {}),
+    };
+
+    const [products, total, categories] = await Promise.all([
+      prisma.product.findMany({
+        where,
+        orderBy: { name: "asc" },
+        skip: q.offset,
+        take: q.limit,
+        select: {
+          id: true,
+          sku: true,
+          name: true,
+          description: true,
+          category: true,
+          retailPrice: true,
+          imageUrl: true,
+          unitOfMeasure: true,
+        },
+      }),
+      prisma.product.count({ where }),
+      prisma.product.findMany({
+        where: { tenantId: tenant.id, isActive: true, showInStore: true, category: { not: null } },
+        distinct: ["category"],
+        select: { category: true },
+      }),
+    ]);
+
+    const ids = products.map((pr) => pr.id);
+    const stock = ids.length
+      ? await prisma.stockBatch.groupBy({
+          by: ["productId"],
+          where: { tenantId: tenant.id, productId: { in: ids } },
+          _sum: { quantityOnHand: true },
+        })
+      : [];
+    const stockMap = new Map(stock.map((s) => [s.productId, s._sum.quantityOnHand?.toString() ?? "0"]));
+
+    return {
+      data: {
+        currencyCode: tenant.baseCurrencyCode,
+        total,
+        categories: categories.map((c) => c.category).filter(Boolean),
+        products: products.map((pr) => ({
+          ...pr,
+          retailPrice: pr.retailPrice?.toString() ?? null,
+          inStock: Number(stockMap.get(pr.id) ?? "0") > 0,
+          stockOnHand: stockMap.get(pr.id) ?? "0",
+        })),
+      },
+    };
+  });
+
+  app.post("/:slug/orders", async (request, reply) => {
+    const p = z.object({ slug: z.string().min(1) }).parse(request.params);
+    const body = z
+      .object({
+        customerName: z.string().min(1).max(120),
+        customerEmail: z.string().email(),
+        lines: z
+          .array(
+            z.object({
+              productId: z.string().uuid(),
+              quantity: z.string(),
+            }),
+          )
+          .min(1),
+      })
+      .parse(request.body);
+
+    const tenant = await prisma.tenant.findFirst({
+      where: { slug: p.slug, isSuspended: false, storeEnabled: true },
+    });
+    if (!tenant) throw new AppError(404, "Not Found", "Store not found.");
+
+    const cashier = await prisma.user.findFirst({
+      where: { tenantId: tenant.id, role: "OWNER", isActive: true },
+    });
+    if (!cashier) throw new AppError(503, "Unavailable", "Store checkout is not configured.");
+
+    const productIds = body.lines.map((l) => l.productId);
+    const products = await prisma.product.findMany({
+      where: {
+        tenantId: tenant.id,
+        id: { in: productIds },
+        isActive: true,
+        showInStore: true,
+      },
+    });
+    if (products.length !== body.lines.length) {
+      throw new AppError(400, "Invalid products", "One or more products are unavailable.");
+    }
+    const priceMap = new Map(products.map((pr) => [pr.id, pr]));
+
+    let subtotal = 0;
+    const saleLines = body.lines.map((l) => {
+      const pr = priceMap.get(l.productId)!;
+      const unitPrice = Number(pr.retailPrice?.toString() ?? "0");
+      if (unitPrice <= 0) {
+        throw new AppError(400, "No price", `Product ${pr.sku} has no retail price.`);
+      }
+      const qty = Number(l.quantity);
+      const lineTotal = unitPrice * qty;
+      subtotal += lineTotal;
+      return {
+        productId: pr.id,
+        quantity: l.quantity,
+        unitPrice: unitPrice.toFixed(4),
+        lineTotal: lineTotal.toFixed(4),
+        taxRatePercent: "0",
+        currencyCode: tenant.baseCurrencyCode,
+      };
+    });
+
+    const receiptNumber = `WEB-${Date.now().toString(36).toUpperCase()}`;
+    const sale = await prisma.sale.create({
+      data: {
+        tenantId: tenant.id,
+        receiptNumber,
+        channel: "ONLINE",
+        status: "COMPLETED",
+        subtotalAmount: subtotal.toFixed(4),
+        taxAmount: "0",
+        totalAmount: subtotal.toFixed(4),
+        currencyCode: tenant.baseCurrencyCode,
+        cashierUserId: cashier.id,
+        lines: { create: saleLines },
+        payments: {
+          create: [
+            {
+              method: "OTHER",
+              amount: subtotal.toFixed(4),
+              currencyCode: tenant.baseCurrencyCode,
+              reference: `online:${body.customerEmail}`,
+            },
+          ],
+        },
+      },
+    });
+
+    await prisma.auditLog.create({
+      data: {
+        tenantId: tenant.id,
+        userId: cashier.id,
+        action: "ONLINE_ORDER",
+        entityName: "Sale",
+        entityId: sale.id,
+        newValues: {
+          customerName: body.customerName,
+          customerEmail: body.customerEmail,
+          receiptNumber,
+          total: subtotal.toFixed(4),
+        },
+      },
+    });
+
+    void reply.code(201);
+    return {
+      data: {
+        orderId: sale.id,
+        receiptNumber,
+        totalAmount: subtotal.toFixed(4),
+        currencyCode: tenant.baseCurrencyCode,
+      },
+    };
+  });
+};

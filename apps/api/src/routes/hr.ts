@@ -6,6 +6,7 @@ import { prisma } from "../lib/prisma.js";
 import { AppError } from "../lib/problem.js";
 import { requireCtx } from "../middleware/tenant.js";
 import { clockIn, clockOut, decideLeaveRequest, runMonthlyPayroll } from "../services/hr.js";
+import { assertCanDecideLeave, resolveLeaveApprover } from "../services/leave-approver.js";
 
 const clockInBody = z.object({
   employeeId: z.string().uuid(),
@@ -23,7 +24,6 @@ const clockOutBody = z.object({
 
 const leaveDecision = z.object({
   leaveRequestId: z.string().uuid(),
-  approverEmployeeId: z.string().uuid(),
   status: z.enum(["APPROVED", "REJECTED"]),
   balanceAfter: z.string().optional(),
 });
@@ -284,10 +284,15 @@ export const hrRoutes: FastifyPluginAsync = async (app) => {
   app.post("/leave/decision", async (request) => {
     const body = parseBody(leaveDecision, request.body);
     const ctx = requireCtx(request);
+    const { approverEmployeeId } = await assertCanDecideLeave({
+      tenantId: ctx.tenantId,
+      userId: ctx.userId,
+      leaveRequestId: body.leaveRequestId,
+    });
     await decideLeaveRequest({
       tenantId: ctx.tenantId,
       leaveRequestId: body.leaveRequestId,
-      approverEmployeeId: body.approverEmployeeId,
+      approverEmployeeId,
       status: body.status,
       balanceAfter: body.balanceAfter,
       userId: ctx.userId,
@@ -444,7 +449,8 @@ export const hrRoutes: FastifyPluginAsync = async (app) => {
       include: {
         employee: { select: { id: true, fullName: true, employeeNumber: true } },
         approver: { select: { id: true, fullName: true } },
-        policy: { select: { id: true, name: true } },
+        assignedApprover: { select: { id: true, fullName: true, jobTitle: true } },
+        policy: { select: { id: true, name: true, approvalTier: true } },
       },
     });
     return {
@@ -458,6 +464,42 @@ export const hrRoutes: FastifyPluginAsync = async (app) => {
         balanceAfter: r.balanceAfter?.toString() ?? null,
         employee: r.employee,
         approver: r.approver,
+        assignedApprover: r.assignedApprover,
+        policy: r.policy,
+      })),
+    };
+  });
+
+  app.get("/leave/my-pending", async (request) => {
+    const ctx = requireCtx(request);
+    const me = await prisma.user.findUniqueOrThrow({ where: { id: ctx.userId } });
+    const emp = await prisma.employee.findFirst({
+      where: { tenantId: ctx.tenantId, email: me.email, isActive: true },
+    });
+    if (!emp && me.role !== "OWNER" && me.role !== "ADMIN") {
+      return { data: [] };
+    }
+    const rows = await prisma.leaveRequest.findMany({
+      where: {
+        tenantId: ctx.tenantId,
+        status: "PENDING",
+        ...(emp && me.role === "MEMBER" ? { assignedApproverId: emp.id } : {}),
+      },
+      orderBy: { startAt: "desc" },
+      include: {
+        employee: { select: { id: true, fullName: true, employeeNumber: true } },
+        assignedApprover: { select: { id: true, fullName: true } },
+        policy: { select: { id: true, name: true } },
+      },
+    });
+    return {
+      data: rows.map((r) => ({
+        id: r.id,
+        startAt: r.startAt.toISOString(),
+        endAt: r.endAt.toISOString(),
+        hours: r.hours.toString(),
+        employee: r.employee,
+        assignedApprover: r.assignedApprover,
         policy: r.policy,
       })),
     };
@@ -485,6 +527,11 @@ export const hrRoutes: FastifyPluginAsync = async (app) => {
     ]);
     if (!employee) throw new AppError(404, "Not found", "Employee not found.");
     if (!policy) throw new AppError(404, "Not found", "Policy not found.");
+    const assignedApproverId = await resolveLeaveApprover({
+      tenantId: ctx.tenantId,
+      employeeId: body.employeeId,
+      approvalTier: policy.approvalTier,
+    });
     const created = await prisma.leaveRequest.create({
       data: {
         tenantId: ctx.tenantId,
@@ -494,6 +541,7 @@ export const hrRoutes: FastifyPluginAsync = async (app) => {
         endAt: new Date(body.endAt),
         hours: body.hours,
         status: "PENDING",
+        assignedApproverId,
       },
     });
     void reply.code(201);

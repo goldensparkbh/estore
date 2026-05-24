@@ -8,7 +8,7 @@ interface RawBodyRequest extends FastifyRequest {
   rawBody?: Buffer;
 }
 
-function mapStripeStatus(s: Stripe.Subscription.Status): "ACTIVE" | "PAST_DUE" | "CANCELLED" | "EXPIRED" {
+export function mapStripeStatus(s: Stripe.Subscription.Status): "ACTIVE" | "PAST_DUE" | "CANCELLED" | "EXPIRED" {
   switch (s) {
     case "active":
     case "trialing":
@@ -77,7 +77,7 @@ async function upsertSubscriptionFromStripe(sub: Stripe.Subscription): Promise<v
   });
 }
 
-async function upsertInvoiceFromStripe(inv: Stripe.Invoice): Promise<void> {
+export async function upsertInvoiceFromStripe(inv: Stripe.Invoice): Promise<void> {
   const customerId = typeof inv.customer === "string" ? inv.customer : inv.customer?.id;
   if (!customerId) return;
   const tenant = await prisma.tenant.findFirst({ where: { stripeCustomerId: customerId } });

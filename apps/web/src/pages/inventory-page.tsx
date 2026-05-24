@@ -1,4 +1,4 @@
-import type { FormEvent, ReactElement } from "react";
+import type { ChangeEvent, FormEvent, ReactElement } from "react";
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -27,9 +27,13 @@ interface ProductRow {
   sku: string;
   name: string;
   description: string | null;
+  category: string | null;
   barcode: string | null;
   defaultValuation: "FIFO" | "LIFO";
   isActive: boolean;
+  retailPrice: string | null;
+  imageUrl: string | null;
+  showInStore: boolean;
   reorderPointQuantity: string | null;
 }
 
@@ -703,21 +707,38 @@ function ProductDialog(props: {
   const [name, setName] = useState(initial?.name ?? "");
   const [description, setDescription] = useState(initial?.description ?? "");
   const [barcode, setBarcode] = useState(initial?.barcode ?? "");
+  const [category, setCategory] = useState(initial?.category ?? "");
+  const [retailPrice, setRetailPrice] = useState(initial?.retailPrice ?? "");
+  const [showInStore, setShowInStore] = useState(initial?.showInStore ?? false);
+  const [imagePreview, setImagePreview] = useState<string | null>(initial?.imageUrl ?? null);
   const [valuation, setValuation] = useState<"FIFO" | "LIFO">(
     initial?.defaultValuation ?? "FIFO",
   );
 
+  const imageMut = useMutation({
+    mutationFn: (vars: { id: string; dataUrl: string }) =>
+      apiFetch(`/v1/inventory/products/${vars.id}/image`, {
+        method: "POST",
+        body: JSON.stringify({ dataUrl: vars.dataUrl }),
+      }),
+  });
+
   const mut = useMutation({
-    mutationFn: (body: Record<string, unknown>) =>
-      isNew
-        ? apiFetch("/v1/inventory/products", {
+    mutationFn: async (body: Record<string, unknown>) => {
+      const res = isNew
+        ? await apiFetch<{ data: { id: string } }>("/v1/inventory/products", {
             method: "POST",
             body: JSON.stringify(body),
           })
-        : apiFetch(`/v1/inventory/products/${initial?.id}`, {
+        : await apiFetch<{ data: { id: string } }>(`/v1/inventory/products/${initial?.id}`, {
             method: "PATCH",
             body: JSON.stringify(body),
-          }),
+          });
+      if (imagePreview?.startsWith("data:") && res.data.id) {
+        await imageMut.mutateAsync({ id: res.data.id, dataUrl: imagePreview });
+      }
+      return res;
+    },
     onSuccess: () => {
       props.onSaved();
       props.onClose();
@@ -732,9 +753,20 @@ function ProductDialog(props: {
       sku,
       name,
       description: description || undefined,
+      category: category || undefined,
       barcode: barcode || undefined,
+      retailPrice: retailPrice || undefined,
+      showInStore,
       defaultValuation: valuation,
     });
+  };
+
+  const onImagePick = (e: ChangeEvent<HTMLInputElement>): void => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => setImagePreview(String(reader.result));
+    reader.readAsDataURL(file);
   };
 
   return (
@@ -791,6 +823,51 @@ function ProductDialog(props: {
               value={barcode}
               onChange={(e) => setBarcode(e.target.value)}
             />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <label className={labelClass}>Category</label>
+              <input
+                className={inputClass}
+                value={category}
+                onChange={(e) => setCategory(e.target.value)}
+                placeholder="e.g. Beverages"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className={labelClass}>Retail price</label>
+              <input
+                className={`${inputClass} font-mono`}
+                value={retailPrice}
+                onChange={(e) => setRetailPrice(e.target.value)}
+                placeholder="0.00"
+              />
+            </div>
+          </div>
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={showInStore}
+              onChange={(e) => setShowInStore(e.target.checked)}
+            />
+            Show in online store
+          </label>
+          <div className="space-y-1">
+            <label className={labelClass}>Product image</label>
+            <div className="flex items-center gap-3">
+              {imagePreview ? (
+                <img
+                  src={imagePreview.startsWith("data:") ? imagePreview : imagePreview}
+                  alt=""
+                  className="h-16 w-16 rounded-lg border border-border object-cover"
+                />
+              ) : (
+                <div className="flex h-16 w-16 items-center justify-center rounded-lg border border-dashed border-border text-xs text-muted-foreground">
+                  No image
+                </div>
+              )}
+              <input type="file" accept="image/*" onChange={onImagePick} />
+            </div>
           </div>
           {mut.isError && (
             <p className="text-sm text-red-400">{(mut.error as Error).message}</p>

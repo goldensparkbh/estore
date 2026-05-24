@@ -16,6 +16,8 @@ import { SessionPage } from "@/pages/session-page";
 import { BillingPage } from "@/pages/billing-page";
 import { AccountPage } from "@/pages/account-page";
 import { TeamPage } from "@/pages/team-page";
+import { StoreLandingPage } from "@/pages/store-landing-page";
+import { StoreShopPage } from "@/pages/store-shop-page";
 import { CheckoutReturnPage } from "@/pages/checkout-return-page";
 import { useSessionStore } from "@/stores/session-store";
 
@@ -27,6 +29,12 @@ const PosPage = lazy(() =>
 );
 const HrPage = lazy(() =>
   import("@/pages/hr-page").then((m) => ({ default: m.HrPage })),
+);
+const ReportsPage = lazy(() =>
+  import("@/pages/reports-page").then((m) => ({ default: m.ReportsPage })),
+);
+const AuditLogPage = lazy(() =>
+  import("@/pages/audit-log-page").then((m) => ({ default: m.AuditLogPage })),
 );
 
 const PlatformDashboardPage = lazy(() =>
@@ -91,6 +99,8 @@ export function App(): ReactElement {
           <Route path="/signup" element={<SignupPage />} />
           <Route path="/forgot-password" element={<ForgotPasswordPage />} />
           <Route path="/reset-password" element={<ResetPasswordPage />} />
+          <Route path="/store/:slug" element={<StoreLandingPage />} />
+          <Route path="/store/:slug/shop" element={<StoreShopPage />} />
           <Route path="/platform/login" element={<PlatformLoginPage />} />
           <Route path="/platform" element={<RequirePlatformAdmin />}>
             <Route element={<PlatformShell />}>
@@ -110,6 +120,8 @@ export function App(): ReactElement {
               <Route path="inventory" element={<InventoryPage />} />
               <Route path="pos" element={<PosPage />} />
               <Route path="hr" element={<HrPage />} />
+              <Route path="reports" element={<ReportsPage />} />
+              <Route path="audit" element={<AuditLogPage />} />
               <Route path="reference" element={<ReferencePage />} />
               <Route path="session" element={<SessionPage />} />
               <Route path="billing" element={<BillingPage />} />

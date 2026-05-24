@@ -12,6 +12,8 @@ interface ProductRow {
   sku: string;
   name: string;
   barcode: string | null;
+  retailPrice: string | null;
+  imageUrl: string | null;
   isActive: boolean;
 }
 
@@ -120,7 +122,7 @@ export function PosPage(): ReactElement {
           sku: p.sku,
           name: p.name,
           quantity: 1,
-          unitPrice: Number(defaultPrice) || 0,
+          unitPrice: Number(p.retailPrice ?? defaultPrice) || 0,
           taxRatePercent: Number(defaultTax) || 0,
         },
       ];
@@ -207,15 +209,22 @@ export function PosPage(): ReactElement {
   };
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[1.4fr_1fr]">
-      <div className="space-y-4">
-        <div className="rounded-xl border border-border bg-card p-4">
+    <div className="touch-manipulation lg:-mx-4 lg:-my-2">
+      <div className="mb-4 flex items-center justify-between lg:hidden">
+        <h1 className="text-lg font-semibold">Point of Sale</h1>
+        <span className="rounded-full bg-primary/15 px-3 py-1 text-sm font-mono text-primary">
+          {currency} {total.toFixed(2)}
+        </span>
+      </div>
+      <div className="grid min-h-[calc(100vh-8rem)] gap-4 lg:grid-cols-[1.6fr_1fr]">
+      <div className="flex flex-col space-y-4">
+        <div className="flex-1 rounded-xl border border-border bg-card p-4">
           <div className="flex items-center gap-2">
-            <Search className="h-4 w-4 text-muted-foreground" />
+            <Search className="h-5 w-5 text-muted-foreground" />
             <input
               autoFocus
-              className={`${inputClass}`}
-              placeholder="Scan barcode or search by SKU / name…"
+              className={`${inputClass} h-12 text-base`}
+              placeholder="Scan barcode or search…"
               value={filter}
               onChange={(e) => setFilter(e.target.value)}
               onKeyDown={(e) => {
@@ -226,7 +235,7 @@ export function PosPage(): ReactElement {
               }}
             />
           </div>
-          <div className="mt-3 grid max-h-[260px] grid-cols-2 gap-2 overflow-y-auto md:grid-cols-3">
+          <div className="mt-4 grid grid-cols-2 gap-3 overflow-y-auto sm:grid-cols-3 xl:grid-cols-4 max-h-[50vh] lg:max-h-none lg:flex-1">
             {products.isLoading && (
               <p className="col-span-full text-sm text-muted-foreground">Loading…</p>
             )}
@@ -235,17 +244,23 @@ export function PosPage(): ReactElement {
                 key={p.id}
                 type="button"
                 onClick={() => addToCart(p)}
-                className="flex flex-col items-start gap-1 rounded-lg border border-border p-3 text-left text-sm transition-colors hover:border-primary/40"
+                className="flex min-h-[120px] flex-col overflow-hidden rounded-xl border border-border bg-background text-left transition active:scale-[0.98] hover:border-primary/40 active:bg-muted/30"
               >
-                <span className="font-mono text-[10px] text-muted-foreground">
-                  {p.sku}
-                </span>
-                <span className="truncate font-medium">{p.name}</span>
-                {p.barcode && (
-                  <span className="font-mono text-[10px] text-muted-foreground">
-                    {p.barcode}
+                <div className="aspect-[4/3] w-full bg-muted/40">
+                  {p.imageUrl ? (
+                    <img src={p.imageUrl} alt="" className="h-full w-full object-cover" />
+                  ) : (
+                    <div className="flex h-full items-center justify-center text-[10px] text-muted-foreground">
+                      {p.sku}
+                    </div>
+                  )}
+                </div>
+                <div className="flex flex-1 flex-col p-3">
+                  <span className="line-clamp-2 text-sm font-semibold leading-tight">{p.name}</span>
+                  <span className="mt-auto pt-2 font-mono text-sm text-primary">
+                    {currency} {Number(p.retailPrice ?? defaultPrice).toFixed(2)}
                   </span>
-                )}
+                </div>
               </button>
             ))}
             {filtered.length === 0 && !products.isLoading && (
@@ -297,11 +312,11 @@ export function PosPage(): ReactElement {
       </div>
 
       <form
-        className="space-y-3 rounded-xl border border-border bg-card p-4"
+        className="sticky top-4 flex flex-col space-y-3 rounded-xl border border-border bg-card p-4 lg:max-h-[calc(100vh-6rem)]"
         onSubmit={onCheckout}
       >
         <div className="flex items-center justify-between">
-          <h2 className="text-sm font-semibold">Cart</h2>
+          <h2 className="text-base font-semibold">Cart ({cart.length})</h2>
           <div className="flex items-center gap-2">
             <label className="text-[10px] uppercase text-muted-foreground">
               Default ¤
@@ -433,10 +448,10 @@ export function PosPage(): ReactElement {
 
         <Button
           type="submit"
-          className="w-full"
+          className="h-14 w-full text-lg"
           disabled={checkout.isPending || cart.length === 0}
         >
-          {checkout.isPending ? "Processing…" : "Charge & complete (Enter)"}
+          {checkout.isPending ? "Processing…" : `Charge ${currency} ${total.toFixed(2)}`}
         </Button>
         {status && (
           <div className="flex items-center justify-between text-sm">
@@ -454,6 +469,7 @@ export function PosPage(): ReactElement {
           </div>
         )}
       </form>
+      </div>
     </div>
   );
 }

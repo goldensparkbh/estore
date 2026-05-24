@@ -68,7 +68,8 @@ interface LeaveRequestRow {
   balanceAfter: string | null;
   employee: { id: string; fullName: string; employeeNumber: string };
   approver: { id: string; fullName: string } | null;
-  policy: { id: string; name: string };
+  assignedApprover: { id: string; fullName: string; jobTitle: string | null } | null;
+  policy: { id: string; name: string; approvalTier?: number };
 }
 
 interface PayrollRunRow {
@@ -163,23 +164,16 @@ function LeaveTab(): ReactElement {
   });
 
   const decide = useMutation({
-    mutationFn: (vars: {
-      requestId: string;
-      approverEmployeeId: string;
-      status: "APPROVED" | "REJECTED";
-    }) =>
+    mutationFn: (vars: { requestId: string; status: "APPROVED" | "REJECTED" }) =>
       apiFetch("/v1/hr/leave/decision", {
         method: "POST",
         body: JSON.stringify({
           leaveRequestId: vars.requestId,
-          approverEmployeeId: vars.approverEmployeeId,
           status: vars.status,
         }),
       }),
     onSuccess: () => void qc.invalidateQueries({ queryKey: ["leave-requests"] }),
   });
-
-  const firstApprover = employees.data?.data?.find((e) => e.isActive)?.id ?? "";
 
   return (
     <div className="space-y-4">
@@ -207,6 +201,7 @@ function LeaveTab(): ReactElement {
               <th className="px-4 py-2">Policy</th>
               <th className="px-4 py-2">Period</th>
               <th className="px-4 py-2 text-right">Hours</th>
+              <th className="px-4 py-2">Approver</th>
               <th className="px-4 py-2">Status</th>
               <th className="px-4 py-2 text-right">Actions</th>
             </tr>
@@ -214,7 +209,7 @@ function LeaveTab(): ReactElement {
           <tbody className="divide-y divide-border">
             {requests.isLoading && (
               <tr>
-                <td colSpan={6} className="px-4 py-6 text-muted-foreground">
+                <td colSpan={7} className="px-4 py-6 text-muted-foreground">
                   Loading…
                 </td>
               </tr>
@@ -233,11 +228,17 @@ function LeaveTab(): ReactElement {
                   {new Date(r.endAt).toLocaleDateString()}
                 </td>
                 <td className="px-4 py-2 text-right font-mono">{r.hours}</td>
+                <td className="px-4 py-2 text-xs text-muted-foreground">
+                  {r.assignedApprover?.fullName ?? "Unassigned"}
+                  {r.policy.approvalTier != null && (
+                    <span className="block text-[10px]">Tier {r.policy.approvalTier}</span>
+                  )}
+                </td>
                 <td className="px-4 py-2 text-xs">
                   <LeaveBadge status={r.status} />
                 </td>
                 <td className="px-4 py-2 text-right">
-                  {r.status === "PENDING" && firstApprover && (
+                  {r.status === "PENDING" && (
                     <>
                       <Button
                         size="sm"
@@ -247,7 +248,6 @@ function LeaveTab(): ReactElement {
                         onClick={() =>
                           decide.mutate({
                             requestId: r.id,
-                            approverEmployeeId: firstApprover,
                             status: "APPROVED",
                           })
                         }
@@ -262,7 +262,6 @@ function LeaveTab(): ReactElement {
                         onClick={() =>
                           decide.mutate({
                             requestId: r.id,
-                            approverEmployeeId: firstApprover,
                             status: "REJECTED",
                           })
                         }
@@ -276,7 +275,7 @@ function LeaveTab(): ReactElement {
             ))}
             {requests.data?.data?.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-4 py-6 text-muted-foreground">
+                <td colSpan={7} className="px-4 py-6 text-muted-foreground">
                   No leave requests yet.
                 </td>
               </tr>

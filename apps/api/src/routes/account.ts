@@ -40,6 +40,9 @@ export const accountRoutes: FastifyPluginAsync = async (app) => {
             baseCurrencyCode: true,
             billingEmail: true,
             isSuspended: true,
+            storeEnabled: true,
+            storeHeadline: true,
+            storeLogoUrl: true,
           },
         },
       },
@@ -122,6 +125,9 @@ export const accountRoutes: FastifyPluginAsync = async (app) => {
         timezone: z.string().min(1).max(64).optional(),
         baseCurrencyCode: z.string().length(3).optional(),
         billingEmail: z.string().email().nullable().optional(),
+        storeEnabled: z.boolean().optional(),
+        storeHeadline: z.string().max(240).nullable().optional(),
+        storeLogoUrl: z.string().url().nullable().optional(),
       }),
       request.body,
     );
@@ -138,6 +144,9 @@ export const accountRoutes: FastifyPluginAsync = async (app) => {
             : body.billingEmail
               ? body.billingEmail.trim().toLowerCase()
               : undefined,
+        storeEnabled: body.storeEnabled,
+        storeHeadline: body.storeHeadline === null ? null : body.storeHeadline,
+        storeLogoUrl: body.storeLogoUrl === null ? null : body.storeLogoUrl,
       },
       select: {
         id: true,
@@ -146,6 +155,9 @@ export const accountRoutes: FastifyPluginAsync = async (app) => {
         timezone: true,
         baseCurrencyCode: true,
         billingEmail: true,
+        storeEnabled: true,
+        storeHeadline: true,
+        storeLogoUrl: true,
       },
     });
     return { data: updated };

@@ -90,6 +90,7 @@ export function isBillingExemptPath(pathname: string): boolean {
   if (pathname.startsWith("/v1/billing")) return true;
   if (pathname.startsWith("/v1/account")) return true;
   if (pathname.startsWith("/v1/team")) return true;
+  if (pathname.startsWith("/v1/audit-logs")) return true;
   return false;
 }
 

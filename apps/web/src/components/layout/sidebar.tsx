@@ -1,6 +1,8 @@
 import type { ReactElement } from "react";
 import { NavLink } from "react-router-dom";
 import {
+  Activity,
+  BarChart3,
   Box,
   Building2,
   ChevronLeft,
@@ -24,10 +26,12 @@ const nav: { to: string; label: string; icon: typeof LayoutDashboard }[] = [
   { to: "/app/inventory", label: "Inventory", icon: Box },
   { to: "/app/pos", label: "Point of Sale", icon: CreditCard },
   { to: "/app/hr", label: "HR & Payroll", icon: Users },
+  { to: "/app/reports", label: "Reports", icon: BarChart3 },
+  { to: "/app/audit", label: "Activity log", icon: Activity },
   { to: "/app/billing", label: "Billing", icon: Receipt },
   { to: "/app/team", label: "Team", icon: Users },
-  { to: "/app/reference", label: "Currencies", icon: Building2 },
   { to: "/app/account", label: "Account", icon: UserCircle },
+  { to: "/app/reference", label: "Currencies", icon: Building2 },
   { to: "/app/session", label: "Dev session", icon: Settings },
 ];
 

@@ -18,6 +18,9 @@ model Tenant {
   isSuspended        Boolean  @default(false)
   stripeCustomerId   String?  @unique
   billingEmail       String?
+  storeEnabled       Boolean  @default(false)
+  storeHeadline      String?
+  storeLogoUrl       String?
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
@@ -294,10 +297,14 @@ model Product {
   sku                  String
   name                 String
   description          String?
+  category             String?
   unitOfMeasure        String               @default("EA")
   defaultValuation     StockValuationMethod @default(FIFO)
   barcode              String?
   qrPayload            String?
+  retailPrice          Decimal?             @db.Decimal(18, 4)
+  imageUrl             String?
+  showInStore          Boolean              @default(false)
   isActive             Boolean              @default(true)
   reorderPointQuantity Decimal?             @db.Decimal(18, 4)
   createdAt            DateTime             @default(now())
@@ -310,6 +317,8 @@ model Product {
   @@unique([tenantId, sku])
   @@index([tenantId])
   @@index([tenantId, barcode])
+  @@index([tenantId, showInStore, isActive])
+  @@index([tenantId, category])
 }
 
 model StockBatch {
@@ -383,6 +392,7 @@ model ReorderRule {
   reorderQuantity Decimal   @db.Decimal(18, 4)
   isActive        Boolean   @default(true)
   lastTriggeredAt DateTime?
+  lastEmailSentAt DateTime?
 
   @@unique([tenantId, productId, warehouseId])
   @@index([tenantId])
@@ -396,12 +406,18 @@ enum SaleStatus {
   VOID
 }
 
+enum SaleChannel {
+  IN_STORE
+  ONLINE
+}
+
 model Sale {
-  id             String     @id @default(uuid())
+  id             String      @id @default(uuid())
   tenantId       String
-  tenant         Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant         Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   receiptNumber  String
-  status         SaleStatus @default(COMPLETED)
+  channel        SaleChannel @default(IN_STORE)
+  status         SaleStatus  @default(COMPLETED)
   subtotalAmount Decimal    @db.Decimal(18, 4)
   taxAmount      Decimal    @db.Decimal(18, 4)
   totalAmount    Decimal    @db.Decimal(18, 4)
@@ -498,9 +514,10 @@ model Employee {
 
   contracts         EmploymentContract[]
   attendance        AttendanceRecord[]
-  leaveRequests     LeaveRequest[]
-  approvedLeaves    LeaveRequest[]     @relation("LeaveApprover")
-  payslips          Payslip[]
+  leaveRequests       LeaveRequest[]
+  approvedLeaves      LeaveRequest[]     @relation("LeaveApprover")
+  assignedLeaveApprovals LeaveRequest[]  @relation("LeaveAssignedApprover")
+  payslips            Payslip[]
 
   @@unique([tenantId, employeeNumber])
   @@unique([tenantId, email])
@@ -580,25 +597,28 @@ model LeavePolicy {
 }
 
 model LeaveRequest {
-  id           String      @id @default(uuid())
-  tenantId     String
-  tenant       Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  employeeId   String
-  employee     Employee    @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  policyId     String
-  policy       LeavePolicy @relation(fields: [policyId], references: [id], onDelete: Restrict)
-  startAt      DateTime
-  endAt        DateTime
-  hours        Decimal     @db.Decimal(18, 4)
-  status       LeaveStatus @default(PENDING)
-  approverId   String?
-  approver     Employee?   @relation("LeaveApprover", fields: [approverId], references: [id])
-  decidedAt    DateTime?
-  balanceAfter Decimal?    @db.Decimal(18, 4)
-  currencyCode String      @default("HOURS")
+  id                  String      @id @default(uuid())
+  tenantId            String
+  tenant              Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  employeeId          String
+  employee            Employee    @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  policyId            String
+  policy              LeavePolicy @relation(fields: [policyId], references: [id], onDelete: Restrict)
+  startAt             DateTime
+  endAt               DateTime
+  hours               Decimal     @db.Decimal(18, 4)
+  status              LeaveStatus @default(PENDING)
+  assignedApproverId  String?
+  assignedApprover    Employee?   @relation("LeaveAssignedApprover", fields: [assignedApproverId], references: [id])
+  approverId          String?
+  approver            Employee?   @relation("LeaveApprover", fields: [approverId], references: [id])
+  decidedAt           DateTime?
+  balanceAfter        Decimal?    @db.Decimal(18, 4)
+  currencyCode        String      @default("HOURS")
 
   @@index([tenantId, status])
   @@index([employeeId])
+  @@index([assignedApproverId])
 }
 
 model PayrollRun {

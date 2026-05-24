@@ -1,8 +1,11 @@
 import type { ReactElement } from "react";
 import { useEffect, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 import { CheckCircle2, Clock, Loader2, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { StoreThemeEffect } from "@/components/theme-sync";
+import { publicFetch, type Storefront } from "@/lib/store-public";
 
 interface MarketplaceOrder {
   id: string;
@@ -49,6 +52,12 @@ export function StoreCheckoutReturnPage(): ReactElement {
   const [order, setOrder] = useState<MarketplaceOrder | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  const store = useQuery({
+    queryKey: ["store", slug],
+    queryFn: () => publicFetch<{ data: Storefront }>(`/v1/store/${slug}`),
+    enabled: Boolean(slug),
+  });
+
   useEffect(() => {
     if (!orderId || !slug) {
       setError("Missing order reference.");
@@ -83,6 +92,7 @@ export function StoreCheckoutReturnPage(): ReactElement {
 
   return (
     <div className="min-h-screen bg-background px-4 py-12">
+      <StoreThemeEffect uiTheme={store.data?.data?.uiTheme} />
       <div className="mx-auto max-w-lg space-y-6">
         <div className="rounded-2xl border border-border bg-card p-8 text-center shadow-sm">
           {!order && !error && (

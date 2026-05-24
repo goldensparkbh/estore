@@ -2,10 +2,12 @@ import type { ReactElement } from "react";
 import { Outlet } from "react-router-dom";
 import { Sidebar } from "@/components/layout/sidebar";
 import { CommandPalette } from "@/components/command-palette";
+import { TenantThemeSync } from "@/components/theme-sync";
 
 export function AppShell(): ReactElement {
   return (
     <div className="flex min-h-screen bg-background">
+      <TenantThemeSync />
       <Sidebar />
       <main className="flex min-w-0 flex-1 flex-col">
         <header className="sticky top-0 z-40 flex items-center border-b border-border bg-background/80 px-6 py-4 backdrop-blur">

@@ -1,30 +1,30 @@
 import { create } from "zustand";
+import { applyDocumentTheme, type UiTheme } from "@/lib/theme";
 
 interface UiState {
   sidebarCollapsed: boolean;
   commandOpen: boolean;
-  theme: "light" | "dark";
+  theme: UiTheme;
   toggleSidebar: () => void;
   setCommandOpen: (open: boolean) => void;
-  setTheme: (theme: "light" | "dark") => void;
-  toggleTheme: () => void;
+  setTheme: (theme: UiTheme) => void;
+  toggleTheme: () => UiTheme;
 }
 
 export const useUiStore = create<UiState>((set, get) => ({
   sidebarCollapsed: false,
   commandOpen: false,
-  theme: (typeof document !== "undefined" && document.documentElement.classList.contains("dark")
-    ? "dark"
-    : "light") as "light" | "dark",
+  theme: "light",
   toggleSidebar: () => set({ sidebarCollapsed: !get().sidebarCollapsed }),
   setCommandOpen: (open) => set({ commandOpen: open }),
   setTheme: (theme) => {
-    document.documentElement.classList.toggle("dark", theme === "dark");
+    applyDocumentTheme(theme);
     set({ theme });
   },
   toggleTheme: () => {
-    const next = get().theme === "dark" ? "light" : "dark";
-    document.documentElement.classList.toggle("dark", next === "dark");
+    const next: UiTheme = get().theme === "dark" ? "light" : "dark";
+    applyDocumentTheme(next);
     set({ theme: next });
+    return next;
   },
 }));

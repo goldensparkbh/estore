@@ -3,6 +3,11 @@ import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
 import { AppError } from "../lib/problem.js";
 import { tapConfigured } from "../services/tap.js";
+import { sendPlatformEmail } from "../services/email.js";
+import {
+  serializeStorefront,
+  storefrontSelect,
+} from "../lib/store-settings.js";
 import {
   createMarketplaceCheckout,
   getMarketplaceOrder,
@@ -14,17 +19,104 @@ export const storeRoutes: FastifyPluginAsync = async (app) => {
     const p = z.object({ slug: z.string().min(1) }).parse(request.params);
     const tenant = await prisma.tenant.findFirst({
       where: { slug: p.slug, isSuspended: false, storeEnabled: true },
+      select: storefrontSelect,
+    });
+    if (!tenant) throw new AppError(404, "Not Found", "Store not found.");
+    return { data: serializeStorefront(tenant) };
+  });
+
+  app.get("/:slug/legal/:policy", async (request) => {
+    const p = z
+      .object({
+        slug: z.string().min(1),
+        policy: z.enum(["terms", "privacy", "refund"]),
+      })
+      .parse(request.params);
+
+    const tenant = await prisma.tenant.findFirst({
+      where: { slug: p.slug, isSuspended: false, storeEnabled: true },
       select: {
-        id: true,
         name: true,
         slug: true,
-        storeHeadline: true,
         storeLogoUrl: true,
-        baseCurrencyCode: true,
+        storeTermsText: true,
+        storePrivacyText: true,
+        storeRefundPolicyText: true,
       },
     });
     if (!tenant) throw new AppError(404, "Not Found", "Store not found.");
-    return { data: tenant };
+
+    const titles = { terms: "Terms & Conditions", privacy: "Privacy Policy", refund: "Refund Policy" };
+    const bodies = {
+      terms: tenant.storeTermsText,
+      privacy: tenant.storePrivacyText,
+      refund: tenant.storeRefundPolicyText,
+    };
+    const content = bodies[p.policy];
+    if (!content?.trim()) {
+      throw new AppError(404, "Not Found", "This policy has not been published yet.");
+    }
+
+    return {
+      data: {
+        slug: tenant.slug,
+        storeName: tenant.name,
+        storeLogoUrl: tenant.storeLogoUrl,
+        policy: p.policy,
+        title: titles[p.policy],
+        content,
+      },
+    };
+  });
+
+  app.post("/:slug/contact", async (request, reply) => {
+    const p = z.object({ slug: z.string().min(1) }).parse(request.params);
+    const body = z
+      .object({
+        name: z.string().min(1).max(120),
+        email: z.string().email(),
+        phone: z.string().max(40).optional(),
+        message: z.string().min(1).max(5000),
+      })
+      .parse(request.body);
+
+    const tenant = await prisma.tenant.findFirst({
+      where: { slug: p.slug, isSuspended: false, storeEnabled: true },
+      select: { name: true, storeContactEmail: true, billingEmail: true },
+    });
+    if (!tenant) throw new AppError(404, "Not Found", "Store not found.");
+
+    const to = tenant.storeContactEmail ?? tenant.billingEmail;
+    if (!to) {
+      throw new AppError(
+        503,
+        "Unavailable",
+        "This store has not configured a contact email yet.",
+      );
+    }
+
+    const result = await sendPlatformEmail({
+      to,
+      subject: `[${tenant.name} store] Contact from ${body.name}`,
+      text: [
+        `New message via ${tenant.name} online store`,
+        "",
+        `Name: ${body.name}`,
+        `Email: ${body.email}`,
+        body.phone ? `Phone: ${body.phone}` : null,
+        "",
+        body.message,
+      ]
+        .filter(Boolean)
+        .join("\n"),
+    });
+
+    if (!result.sent) {
+      throw new AppError(503, "Unavailable", result.error ?? "Could not send message.");
+    }
+
+    void reply.code(201);
+    return { data: { sent: true } };
   });
 
   app.get("/:slug/products", async (request) => {
@@ -33,6 +125,7 @@ export const storeRoutes: FastifyPluginAsync = async (app) => {
       .object({
         category: z.string().optional(),
         search: z.string().optional(),
+        sort: z.enum(["name", "latest"]).default("name"),
         limit: z.coerce.number().int().min(1).max(100).default(48),
         offset: z.coerce.number().int().min(0).default(0),
       })
@@ -62,7 +155,7 @@ export const storeRoutes: FastifyPluginAsync = async (app) => {
     const [products, total, categories] = await Promise.all([
       prisma.product.findMany({
         where,
-        orderBy: { name: "asc" },
+        orderBy: q.sort === "latest" ? { createdAt: "desc" } : { name: "asc" },
         skip: q.offset,
         take: q.limit,
         select: {

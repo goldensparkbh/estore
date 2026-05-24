@@ -3,6 +3,9 @@ import { createRoot } from "react-dom/client";
 import { App } from "./App";
 import "./index.css";
 import { QueryProvider } from "./providers/query-provider";
+import { applyDocumentTheme } from "./lib/theme";
+
+applyDocumentTheme("light");
 
 const el = document.getElementById("root");
 if (!el) {

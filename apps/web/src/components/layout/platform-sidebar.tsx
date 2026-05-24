@@ -8,11 +8,15 @@ import {
   Layers,
   LogOut,
   Mail,
+  Moon,
   ShoppingBag,
+  Sun,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { savePlatformTheme } from "@/lib/theme";
 import { Button } from "@/components/ui/button";
 import { usePlatformAdminStore } from "@/stores/platform-admin-store";
+import { useUiStore } from "@/stores/ui-store";
 
 const nav = [
   { to: "/platform", label: "Overview", icon: LayoutDashboard, end: true },
@@ -28,6 +32,13 @@ export function PlatformSidebar(): ReactElement {
   const displayName = usePlatformAdminStore((s) => s.displayName);
   const email = usePlatformAdminStore((s) => s.email);
   const clear = usePlatformAdminStore((s) => s.clearOperator);
+  const theme = useUiStore((s) => s.theme);
+  const toggleThemeLocal = useUiStore((s) => s.toggleTheme);
+
+  const onThemeToggle = (): void => {
+    const next = toggleThemeLocal();
+    savePlatformTheme(next);
+  };
 
   return (
     <aside className="flex h-screen w-56 shrink-0 flex-col border-r border-border bg-card">
@@ -57,6 +68,15 @@ export function PlatformSidebar(): ReactElement {
         ))}
       </nav>
       <div className="space-y-1 border-t border-border p-2">
+        <Button
+          variant="subtle"
+          className="w-full justify-start gap-2"
+          type="button"
+          onClick={onThemeToggle}
+        >
+          {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+          Theme
+        </Button>
         <Button variant="ghost" className="w-full justify-start gap-2" type="button" asChild>
           <a href="/">Marketing site</a>
         </Button>

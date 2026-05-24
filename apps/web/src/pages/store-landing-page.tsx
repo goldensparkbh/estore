@@ -1,33 +1,31 @@
 import type { ReactElement } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowRight, ShoppingBag } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
-
-interface StoreInfo {
-  data: {
-    id: string;
-    name: string;
-    slug: string;
-    storeHeadline: string | null;
-    storeLogoUrl: string | null;
-    baseCurrencyCode: string;
-  };
-}
-
-async function publicFetch<T>(path: string): Promise<T> {
-  const res = await fetch(path);
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  return (await res.json()) as T;
-}
+import { StoreCarousel } from "@/components/store/store-carousel";
+import { StoreContactForm } from "@/components/store/store-contact-form";
+import { StoreFooter } from "@/components/store/store-footer";
+import { StoreNavbar } from "@/components/store/store-navbar";
+import { StoreThemeEffect } from "@/components/theme-sync";
+import { publicFetch, type Storefront, type StoreProduct } from "@/lib/store-public";
 
 export function StoreLandingPage(): ReactElement {
   const { slug = "" } = useParams();
 
   const store = useQuery({
     queryKey: ["store", slug],
-    queryFn: () => publicFetch<StoreInfo>(`/v1/store/${slug}`),
+    queryFn: () => publicFetch<{ data: Storefront }>(`/v1/store/${slug}`),
     enabled: Boolean(slug),
+  });
+
+  const latest = useQuery({
+    queryKey: ["store-latest", slug],
+    queryFn: () =>
+      publicFetch<{
+        data: { currencyCode: string; products: StoreProduct[] };
+      }>(`/v1/store/${slug}/products?sort=latest&limit=8`),
+    enabled: Boolean(slug) && store.isSuccess,
   });
 
   if (store.isLoading) {
@@ -50,41 +48,93 @@ export function StoreLandingPage(): ReactElement {
   }
 
   const s = store.data.data;
+  const products = latest.data?.data.products ?? [];
+  const currency = latest.data?.data.currencyCode ?? s.baseCurrencyCode;
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-background via-background to-muted/30">
-      <header className="border-b border-border/60 bg-card/80 backdrop-blur">
-        <div className="mx-auto flex max-w-5xl items-center justify-between px-6 py-4">
-          <div className="flex items-center gap-3">
-            {s.storeLogoUrl ? (
-              <img src={s.storeLogoUrl} alt="" className="h-10 w-10 rounded-lg object-cover" />
-            ) : (
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/15 text-sm font-bold text-primary">
-                {s.name.slice(0, 2).toUpperCase()}
-              </div>
-            )}
-            <span className="font-semibold">{s.name}</span>
-          </div>
-          <Button asChild>
-            <Link to={`/store/${slug}/shop`}>
-              <ShoppingBag className="mr-2 h-4 w-4" /> Shop now
-            </Link>
-          </Button>
-        </div>
-      </header>
+    <div className="flex min-h-screen flex-col bg-background">
+      <StoreThemeEffect uiTheme={s.uiTheme} />
+      <StoreNavbar store={s} slug={slug} active="home" />
+      <StoreCarousel images={s.storeCarouselImages} headline={s.storeHeadline} />
 
-      <main className="mx-auto max-w-5xl px-6 py-16 text-center">
-        <p className="text-xs uppercase tracking-widest text-primary">Online store</p>
-        <h1 className="mt-3 text-4xl font-bold tracking-tight md:text-5xl">{s.name}</h1>
-        <p className="mx-auto mt-4 max-w-xl text-lg text-muted-foreground">
-          {s.storeHeadline ?? "Browse our catalog and order online. Prices in " + s.baseCurrencyCode + "."}
-        </p>
-        <Button size="lg" className="mt-8" asChild>
-          <Link to={`/store/${slug}/shop`}>
-            Browse products <ArrowRight className="ml-2 h-4 w-4" />
-          </Link>
-        </Button>
+      <main className="flex-1">
+        <section className="mx-auto max-w-6xl px-4 py-14 sm:px-6">
+          <div className="flex flex-wrap items-end justify-between gap-4">
+            <div>
+              <p className="text-xs uppercase tracking-widest text-primary">New arrivals</p>
+              <h2 className="mt-1 text-2xl font-bold tracking-tight">Latest products</h2>
+            </div>
+            <Button variant="subtle" asChild>
+              <Link to={`/store/${slug}/shop`}>
+                View all <ArrowRight className="ml-1 h-4 w-4" />
+              </Link>
+            </Button>
+          </div>
+
+          {latest.isLoading && (
+            <p className="mt-8 text-sm text-muted-foreground">Loading products…</p>
+          )}
+
+          <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {products.map((p) => (
+              <Link
+                key={p.id}
+                to={`/store/${slug}/shop`}
+                className="group overflow-hidden rounded-xl border border-border bg-card transition hover:border-primary/40"
+              >
+                <div className="aspect-square bg-muted/40">
+                  {p.imageUrl ? (
+                    <img
+                      src={p.imageUrl}
+                      alt=""
+                      className="h-full w-full object-cover transition group-hover:scale-105"
+                    />
+                  ) : (
+                    <div className="flex h-full items-center justify-center text-xs text-muted-foreground">
+                      No image
+                    </div>
+                  )}
+                </div>
+                <div className="p-4">
+                  {p.category && (
+                    <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                      {p.category}
+                    </p>
+                  )}
+                  <h3 className="mt-1 font-semibold">{p.name}</h3>
+                  <p className="mt-2 text-lg font-bold">
+                    {currency} {Number(p.retailPrice ?? 0).toFixed(2)}
+                  </p>
+                  {!p.inStock && (
+                    <p className="mt-1 text-xs text-amber-400">Out of stock</p>
+                  )}
+                </div>
+              </Link>
+            ))}
+          </div>
+
+          {!latest.isLoading && products.length === 0 && (
+            <p className="mt-8 rounded-lg border border-dashed border-border py-12 text-center text-muted-foreground">
+              No products in the store yet. Check back soon.
+            </p>
+          )}
+        </section>
+
+        <section id="contact" className="border-t border-border bg-muted/20 py-14">
+          <div className="mx-auto max-w-6xl px-4 sm:px-6">
+            <div className="mb-8 text-center">
+              <p className="text-xs uppercase tracking-widest text-primary">Get in touch</p>
+              <h2 className="mt-1 text-2xl font-bold">Contact us</h2>
+              <p className="mx-auto mt-2 max-w-md text-sm text-muted-foreground">
+                Questions about an order or our products? Send us a message.
+              </p>
+            </div>
+            <StoreContactForm slug={slug} />
+          </div>
+        </section>
       </main>
+
+      <StoreFooter store={s} slug={slug} />
     </div>
   );
 }

@@ -1,9 +1,16 @@
 import type { FastifyPluginAsync } from "fastify";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
+import { Prisma } from "@prisma/client";
 import { prisma } from "../lib/prisma.js";
 import { AppError } from "../lib/problem.js";
 import { requireCtx } from "../middleware/tenant.js";
+import {
+  parseStoreCarousel,
+  parseStoreSocialLinks,
+  parseUiTheme,
+  tenantStorePatchSchema,
+} from "../lib/store-settings.js";
 
 function parseBody<T>(schema: z.ZodType<T>, body: unknown): T {
   const parsed = schema.safeParse(body);
@@ -43,6 +50,14 @@ export const accountRoutes: FastifyPluginAsync = async (app) => {
             storeEnabled: true,
             storeHeadline: true,
             storeLogoUrl: true,
+            storeContactEmail: true,
+            storePhone: true,
+            storeCarouselImages: true,
+            storeSocialLinks: true,
+            storeTermsText: true,
+            storePrivacyText: true,
+            storeRefundPolicyText: true,
+            uiTheme: true,
             tapDestinationId: true,
             marketplaceCommissionRate: true,
           },
@@ -59,7 +74,14 @@ export const accountRoutes: FastifyPluginAsync = async (app) => {
           isActive: user.isActive,
           createdAt: user.createdAt.toISOString(),
         },
-        tenant: user.tenant,
+        tenant: {
+          ...user.tenant,
+          marketplaceCommissionRate:
+            user.tenant.marketplaceCommissionRate?.toString() ?? null,
+          storeCarouselImages: parseStoreCarousel(user.tenant.storeCarouselImages),
+          storeSocialLinks: parseStoreSocialLinks(user.tenant.storeSocialLinks),
+          uiTheme: parseUiTheme(user.tenant.uiTheme),
+        },
       },
     };
   });
@@ -122,17 +144,14 @@ export const accountRoutes: FastifyPluginAsync = async (app) => {
       throw new AppError(403, "Forbidden", "Only owners or admins can change workspace settings.");
     }
     const body = parseBody(
-      z.object({
-        name: z.string().min(2).max(200).optional(),
-        timezone: z.string().min(1).max(64).optional(),
-        baseCurrencyCode: z.string().length(3).optional(),
-        billingEmail: z.string().email().nullable().optional(),
-        storeEnabled: z.boolean().optional(),
-        storeHeadline: z.string().max(240).nullable().optional(),
-        storeLogoUrl: z.string().url().nullable().optional(),
-        tapDestinationId: z.string().max(120).nullable().optional(),
-        marketplaceCommissionRate: z.string().nullable().optional(),
-      }),
+      z
+        .object({
+          name: z.string().min(2).max(200).optional(),
+          timezone: z.string().min(1).max(64).optional(),
+          baseCurrencyCode: z.string().length(3).optional(),
+          billingEmail: z.string().email().nullable().optional(),
+        })
+        .merge(tenantStorePatchSchema),
       request.body,
     );
 
@@ -151,6 +170,30 @@ export const accountRoutes: FastifyPluginAsync = async (app) => {
         storeEnabled: body.storeEnabled,
         storeHeadline: body.storeHeadline === null ? null : body.storeHeadline,
         storeLogoUrl: body.storeLogoUrl === null ? null : body.storeLogoUrl,
+        storeContactEmail:
+          body.storeContactEmail === null
+            ? null
+            : body.storeContactEmail
+              ? body.storeContactEmail.trim().toLowerCase()
+              : undefined,
+        storePhone: body.storePhone === null ? null : body.storePhone,
+        storeCarouselImages:
+          body.storeCarouselImages === null
+            ? Prisma.DbNull
+            : body.storeCarouselImages === undefined
+              ? undefined
+              : body.storeCarouselImages,
+        storeSocialLinks:
+          body.storeSocialLinks === null
+            ? Prisma.DbNull
+            : body.storeSocialLinks === undefined
+              ? undefined
+              : body.storeSocialLinks,
+        storeTermsText: body.storeTermsText === null ? null : body.storeTermsText,
+        storePrivacyText: body.storePrivacyText === null ? null : body.storePrivacyText,
+        storeRefundPolicyText:
+          body.storeRefundPolicyText === null ? null : body.storeRefundPolicyText,
+        uiTheme: body.uiTheme,
         tapDestinationId: body.tapDestinationId === null ? null : body.tapDestinationId,
         marketplaceCommissionRate:
           body.marketplaceCommissionRate === null
@@ -167,10 +210,26 @@ export const accountRoutes: FastifyPluginAsync = async (app) => {
         storeEnabled: true,
         storeHeadline: true,
         storeLogoUrl: true,
+        storeContactEmail: true,
+        storePhone: true,
+        storeCarouselImages: true,
+        storeSocialLinks: true,
+        storeTermsText: true,
+        storePrivacyText: true,
+        storeRefundPolicyText: true,
+        uiTheme: true,
         tapDestinationId: true,
         marketplaceCommissionRate: true,
       },
     });
-    return { data: updated };
+    return {
+      data: {
+        ...updated,
+        marketplaceCommissionRate: updated.marketplaceCommissionRate?.toString() ?? null,
+        storeCarouselImages: parseStoreCarousel(updated.storeCarouselImages),
+        storeSocialLinks: parseStoreSocialLinks(updated.storeSocialLinks),
+        uiTheme: parseUiTheme(updated.uiTheme),
+      },
+    };
   });
 };

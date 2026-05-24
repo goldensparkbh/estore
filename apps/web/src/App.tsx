@@ -17,6 +17,7 @@ import { BillingPage } from "@/pages/billing-page";
 import { AccountPage } from "@/pages/account-page";
 import { TeamPage } from "@/pages/team-page";
 import { StoreLandingPage } from "@/pages/store-landing-page";
+import { StoreLegalPage } from "@/pages/store-legal-page";
 import { StoreShopPage } from "@/pages/store-shop-page";
 import { StoreCheckoutReturnPage } from "@/pages/store-checkout-return-page";
 import { CheckoutReturnPage } from "@/pages/checkout-return-page";
@@ -112,6 +113,7 @@ export function App(): ReactElement {
           <Route path="/reset-password" element={<ResetPasswordPage />} />
           <Route path="/store/:slug" element={<StoreLandingPage />} />
           <Route path="/store/:slug/shop" element={<StoreShopPage />} />
+          <Route path="/store/:slug/legal/:policy" element={<StoreLegalPage />} />
           <Route path="/store/:slug/checkout/return" element={<StoreCheckoutReturnPage />} />
           <Route path="/platform/login" element={<PlatformLoginPage />} />
           <Route path="/platform" element={<RequirePlatformAdmin />}>

@@ -5,27 +5,14 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { Minus, Plus, ShoppingCart, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
-interface StoreProduct {
-  id: string;
-  sku: string;
-  name: string;
-  description: string | null;
-  category: string | null;
-  retailPrice: string | null;
-  imageUrl: string | null;
-  inStock: boolean;
-  stockOnHand: string;
-}
+import { StoreFooter } from "@/components/store/store-footer";
+import { StoreNavbar } from "@/components/store/store-navbar";
+import { StoreThemeEffect } from "@/components/theme-sync";
+import { publicFetch, type StoreProduct, type Storefront } from "@/lib/store-public";
 
 interface CartLine {
   product: StoreProduct;
   quantity: number;
-}
-
-async function publicFetch<T>(path: string): Promise<T> {
-  const res = await fetch(path);
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  return (await res.json()) as T;
 }
 
 export function StoreShopPage(): ReactElement {
@@ -36,6 +23,12 @@ export function StoreShopPage(): ReactElement {
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [customerName, setCustomerName] = useState("");
   const [customerEmail, setCustomerEmail] = useState("");
+
+  const store = useQuery({
+    queryKey: ["store", slug],
+    queryFn: () => publicFetch<{ data: Storefront }>(`/v1/store/${slug}`),
+    enabled: Boolean(slug),
+  });
 
   const products = useQuery({
     queryKey: ["store-products", slug, search, category],
@@ -108,12 +101,23 @@ export function StoreShopPage(): ReactElement {
   });
 
   return (
-    <div className="min-h-screen bg-background">
-      <header className="sticky top-0 z-10 border-b border-border bg-card/95 backdrop-blur">
+    <div className="flex min-h-screen flex-col bg-background">
+      <StoreThemeEffect uiTheme={store.data?.data?.uiTheme} />
+      {store.data?.data && (
+        <StoreNavbar store={store.data.data} slug={slug} active="shop" />
+      )}
+      {!store.data?.data && (
+        <header className="sticky top-0 z-10 border-b border-border bg-card/95 backdrop-blur">
+          <div className="mx-auto flex max-w-6xl items-center gap-4 px-4 py-3">
+            <Link to={`/store/${slug}`} className="font-semibold">
+              Store
+            </Link>
+          </div>
+        </header>
+      )}
+
+      <div className="sticky top-[57px] z-10 border-b border-border bg-card/95 backdrop-blur">
         <div className="mx-auto flex max-w-6xl items-center gap-4 px-4 py-3">
-          <Link to={`/store/${slug}`} className="font-semibold">
-            Store
-          </Link>
           <input
             className="flex-1 rounded-lg border border-border bg-background px-3 py-2 text-sm"
             placeholder="Search products…"
@@ -138,9 +142,9 @@ export function StoreShopPage(): ReactElement {
             ) : null,
           )}
         </div>
-      </header>
+      </div>
 
-      <main className="mx-auto grid max-w-6xl gap-4 px-4 py-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+      <main className="mx-auto grid max-w-6xl flex-1 gap-4 px-4 py-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
         {filtered.map((p) => (
           <article
             key={p.id}
@@ -260,6 +264,8 @@ export function StoreShopPage(): ReactElement {
           </div>
         </div>
       )}
+
+      {store.data?.data && <StoreFooter store={store.data.data} slug={slug} />}
     </div>
   );
 }

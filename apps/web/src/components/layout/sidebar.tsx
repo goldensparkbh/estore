@@ -1,5 +1,6 @@
 import type { ReactElement } from "react";
 import { NavLink } from "react-router-dom";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Activity,
   BarChart3,
@@ -19,6 +20,7 @@ import {
   Users,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { apiFetch } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { useUiStore } from "@/stores/ui-store";
 
@@ -38,10 +40,34 @@ const nav: { to: string; label: string; icon: typeof LayoutDashboard }[] = [
 ];
 
 export function Sidebar(): ReactElement {
+  const qc = useQueryClient();
   const collapsed = useUiStore((s) => s.sidebarCollapsed);
   const toggleSidebar = useUiStore((s) => s.toggleSidebar);
   const theme = useUiStore((s) => s.theme);
-  const toggleTheme = useUiStore((s) => s.toggleTheme);
+  const toggleThemeLocal = useUiStore((s) => s.toggleTheme);
+
+  const me = useQuery({
+    queryKey: ["account-me"],
+    queryFn: () =>
+      apiFetch<{ data: { user: { role: string } } }>("/v1/account/me"),
+  });
+  const role = me.data?.data?.user?.role ?? "";
+  const isAdminish = role === "OWNER" || role === "ADMIN";
+
+  const saveTheme = useMutation({
+    mutationFn: (uiTheme: "light" | "dark") =>
+      apiFetch("/v1/account/tenant", {
+        method: "PATCH",
+        body: JSON.stringify({ uiTheme }),
+      }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ["account-me"] }),
+  });
+
+  const onThemeToggle = (): void => {
+    if (!isAdminish) return;
+    const next = toggleThemeLocal();
+    saveTheme.mutate(next);
+  };
 
   return (
     <aside
@@ -96,15 +122,18 @@ export function Sidebar(): ReactElement {
       </nav>
 
       <div className="border-t border-border p-2">
-        <Button
-          variant="subtle"
-          className={cn("w-full justify-start gap-2", collapsed && "justify-center px-0")}
-          type="button"
-          onClick={toggleTheme}
-        >
-          {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-          {!collapsed && <span className="text-xs font-medium">Theme</span>}
-        </Button>
+        {isAdminish && (
+          <Button
+            variant="subtle"
+            className={cn("w-full justify-start gap-2", collapsed && "justify-center px-0")}
+            type="button"
+            onClick={onThemeToggle}
+            disabled={saveTheme.isPending}
+          >
+            {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+            {!collapsed && <span className="text-xs font-medium">Theme</span>}
+          </Button>
+        )}
       </div>
     </aside>
   );

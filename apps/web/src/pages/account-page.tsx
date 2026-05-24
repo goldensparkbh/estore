@@ -5,6 +5,10 @@ import { Link, useNavigate } from "react-router-dom";
 import { apiFetch } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { useSessionStore } from "@/stores/session-store";
+import { useUiStore } from "@/stores/ui-store";
+
+import type { StoreSocialLinks } from "@/lib/store-public";
+import type { UiTheme } from "@/lib/theme";
 
 interface MeResponse {
   data: {
@@ -19,10 +23,27 @@ interface MeResponse {
       storeEnabled: boolean;
       storeHeadline: string | null;
       storeLogoUrl: string | null;
+      storeContactEmail: string | null;
+      storePhone: string | null;
+      storeCarouselImages: string[] | null;
+      storeSocialLinks: StoreSocialLinks | null;
+      storeTermsText: string | null;
+      storePrivacyText: string | null;
+      storeRefundPolicyText: string | null;
+      uiTheme: UiTheme;
       tapDestinationId: string | null;
       marketplaceCommissionRate: string | null;
     };
   };
+}
+
+function carouselToText(raw: unknown): string {
+  if (!Array.isArray(raw)) return "";
+  return raw.filter((v): v is string => typeof v === "string").join("\n");
+}
+
+function socialFromTenant(raw: StoreSocialLinks | null | undefined): StoreSocialLinks {
+  return raw ?? {};
 }
 
 const labelClass = "text-xs font-medium text-muted-foreground";
@@ -34,10 +55,25 @@ export function AccountPage(): ReactElement {
   const navigate = useNavigate();
   const clearSession = useSessionStore((s) => s.clearSession);
   const setSession = useSessionStore((s) => s.setSession);
+  const applyTheme = useUiStore((s) => s.setTheme);
 
   const [storeEnabled, setStoreEnabled] = useState(false);
   const [storeHeadline, setStoreHeadline] = useState("");
   const [storeLogoUrl, setStoreLogoUrl] = useState("");
+  const [storeContactEmail, setStoreContactEmail] = useState("");
+  const [storePhone, setStorePhone] = useState("");
+  const [storeCarouselText, setStoreCarouselText] = useState("");
+  const [socialFacebook, setSocialFacebook] = useState("");
+  const [socialInstagram, setSocialInstagram] = useState("");
+  const [socialTwitter, setSocialTwitter] = useState("");
+  const [socialTiktok, setSocialTiktok] = useState("");
+  const [socialLinkedin, setSocialLinkedin] = useState("");
+  const [socialYoutube, setSocialYoutube] = useState("");
+  const [socialWhatsapp, setSocialWhatsapp] = useState("");
+  const [storeTermsText, setStoreTermsText] = useState("");
+  const [storePrivacyText, setStorePrivacyText] = useState("");
+  const [storeRefundPolicyText, setStoreRefundPolicyText] = useState("");
+  const [uiTheme, setUiTheme] = useState<UiTheme>("light");
   const [tapDestinationId, setTapDestinationId] = useState("");
   const [marketplaceCommissionRate, setMarketplaceCommissionRate] = useState("");
 
@@ -70,8 +106,27 @@ export function AccountPage(): ReactElement {
       setStoreEnabled(me.data.data.tenant.storeEnabled ?? false);
       setStoreHeadline(me.data.data.tenant.storeHeadline ?? "");
       setStoreLogoUrl(me.data.data.tenant.storeLogoUrl ?? "");
+      setStoreContactEmail(me.data.data.tenant.storeContactEmail ?? "");
+      setStorePhone(me.data.data.tenant.storePhone ?? "");
+      setStoreCarouselText(carouselToText(me.data.data.tenant.storeCarouselImages));
+      const social = socialFromTenant(me.data.data.tenant.storeSocialLinks);
+      setSocialFacebook(social.facebook ?? "");
+      setSocialInstagram(social.instagram ?? "");
+      setSocialTwitter(social.twitter ?? "");
+      setSocialTiktok(social.tiktok ?? "");
+      setSocialLinkedin(social.linkedin ?? "");
+      setSocialYoutube(social.youtube ?? "");
+      setSocialWhatsapp(social.whatsapp ?? "");
+      setStoreTermsText(me.data.data.tenant.storeTermsText ?? "");
+      setStorePrivacyText(me.data.data.tenant.storePrivacyText ?? "");
+      setStoreRefundPolicyText(me.data.data.tenant.storeRefundPolicyText ?? "");
+      setUiTheme(me.data.data.tenant.uiTheme === "dark" ? "dark" : "light");
       setTapDestinationId(me.data.data.tenant.tapDestinationId ?? "");
-      setMarketplaceCommissionRate(me.data.data.tenant.marketplaceCommissionRate ?? "");
+      setMarketplaceCommissionRate(
+        me.data.data.tenant.marketplaceCommissionRate != null
+          ? String(me.data.data.tenant.marketplaceCommissionRate)
+          : "",
+      );
     }
   }, [me.data?.data?.tenant]);
 
@@ -93,22 +148,15 @@ export function AccountPage(): ReactElement {
   });
 
   const tenantMut = useMutation({
-    mutationFn: (vars: {
-      name?: string;
-      timezone?: string;
-      baseCurrencyCode?: string;
-      billingEmail?: string | null;
-      storeEnabled?: boolean;
-      storeHeadline?: string | null;
-      storeLogoUrl?: string | null;
-      tapDestinationId?: string | null;
-      marketplaceCommissionRate?: string | null;
-    }) =>
+    mutationFn: (vars: Record<string, unknown>) =>
       apiFetch<{ data: unknown }>("/v1/account/tenant", {
         method: "PATCH",
         body: JSON.stringify(vars),
       }),
-    onSuccess: () => void qc.invalidateQueries({ queryKey: ["account-me"] }),
+    onSuccess: () => {
+      applyTheme(uiTheme);
+      void qc.invalidateQueries({ queryKey: ["account-me"] });
+    },
   });
 
   const passwordMut = useMutation({
@@ -131,6 +179,21 @@ export function AccountPage(): ReactElement {
 
   const onTenant = (e: FormEvent): void => {
     e.preventDefault();
+    const carouselUrls = storeCarouselText
+      .split("\n")
+      .map((l) => l.trim())
+      .filter(Boolean);
+
+    const socialLinks: StoreSocialLinks = {
+      facebook: socialFacebook.trim() || null,
+      instagram: socialInstagram.trim() || null,
+      twitter: socialTwitter.trim() || null,
+      tiktok: socialTiktok.trim() || null,
+      linkedin: socialLinkedin.trim() || null,
+      youtube: socialYoutube.trim() || null,
+      whatsapp: socialWhatsapp.trim() || null,
+    };
+
     tenantMut.mutate({
       name: orgName,
       timezone,
@@ -139,6 +202,14 @@ export function AccountPage(): ReactElement {
       storeEnabled,
       storeHeadline: storeHeadline.trim() || null,
       storeLogoUrl: storeLogoUrl.trim() || null,
+      storeContactEmail: storeContactEmail.trim() || null,
+      storePhone: storePhone.trim() || null,
+      storeCarouselImages: carouselUrls.length > 0 ? carouselUrls : null,
+      storeSocialLinks: socialLinks,
+      storeTermsText: storeTermsText.trim() || null,
+      storePrivacyText: storePrivacyText.trim() || null,
+      storeRefundPolicyText: storeRefundPolicyText.trim() || null,
+      uiTheme,
       tapDestinationId: tapDestinationId.trim() || null,
       marketplaceCommissionRate: marketplaceCommissionRate.trim() || null,
     });
@@ -162,7 +233,7 @@ export function AccountPage(): ReactElement {
   const isAdminish = role === "OWNER" || role === "ADMIN";
 
   return (
-    <div className="mx-auto max-w-3xl space-y-8">
+    <div className="mx-auto max-w-4xl space-y-8">
       <div className="flex items-center justify-between">
         <div>
           <p className="text-xs uppercase tracking-wide text-muted-foreground">Account</p>
@@ -343,6 +414,38 @@ export function AccountPage(): ReactElement {
           </div>
         </div>
         <div className="rounded-lg border border-border bg-muted/20 p-4 space-y-3">
+          <h3 className="text-sm font-medium">Appearance</h3>
+          <p className="text-xs text-muted-foreground">
+            Applies to your workspace dashboard and public online store.
+          </p>
+          <div className="flex flex-wrap gap-3">
+            {(["light", "dark"] as const).map((mode) => (
+              <label
+                key={mode}
+                className={`flex cursor-pointer items-center gap-2 rounded-lg border px-4 py-2 text-sm capitalize transition ${
+                  uiTheme === mode
+                    ? "border-primary bg-primary/10 text-foreground"
+                    : "border-border text-muted-foreground hover:border-primary/40"
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="uiTheme"
+                  value={mode}
+                  checked={uiTheme === mode}
+                  disabled={!isAdminish}
+                  className="sr-only"
+                  onChange={() => {
+                    setUiTheme(mode);
+                    applyTheme(mode);
+                  }}
+                />
+                {mode} theme
+              </label>
+            ))}
+          </div>
+        </div>
+        <div className="rounded-lg border border-border bg-muted/20 p-4 space-y-4">
           <h3 className="text-sm font-medium">Online store</h3>
           <label className="flex items-center gap-2 text-sm">
             <input
@@ -353,54 +456,159 @@ export function AccountPage(): ReactElement {
             />
             Enable public online store
           </label>
-          <div className="space-y-1">
-            <label className={labelClass} htmlFor="sh">Store headline</label>
-            <input
-              id="sh"
-              className={inputClass}
-              value={storeHeadline}
-              onChange={(e) => setStoreHeadline(e.target.value)}
-              disabled={!isAdminish}
-              placeholder="Quality goods delivered fast"
-            />
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-1 sm:col-span-2">
+              <label className={labelClass} htmlFor="sh">Store headline</label>
+              <input
+                id="sh"
+                className={inputClass}
+                value={storeHeadline}
+                onChange={(e) => setStoreHeadline(e.target.value)}
+                disabled={!isAdminish}
+                placeholder="Quality goods delivered fast"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className={labelClass} htmlFor="sl">Logo URL</label>
+              <input
+                id="sl"
+                className={inputClass}
+                value={storeLogoUrl}
+                onChange={(e) => setStoreLogoUrl(e.target.value)}
+                disabled={!isAdminish}
+                placeholder="https://…"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className={labelClass} htmlFor="sp">Phone (footer)</label>
+              <input
+                id="sp"
+                className={inputClass}
+                value={storePhone}
+                onChange={(e) => setStorePhone(e.target.value)}
+                disabled={!isAdminish}
+                placeholder="+966 5x xxx xxxx"
+              />
+            </div>
+            <div className="space-y-1 sm:col-span-2">
+              <label className={labelClass} htmlFor="sce">Store contact email</label>
+              <input
+                id="sce"
+                type="email"
+                className={inputClass}
+                value={storeContactEmail}
+                onChange={(e) => setStoreContactEmail(e.target.value)}
+                disabled={!isAdminish}
+                placeholder="hello@yourstore.com"
+              />
+              <p className="text-[10px] text-muted-foreground">
+                Shown in the footer and receives contact form messages.
+              </p>
+            </div>
+            <div className="space-y-1 sm:col-span-2">
+              <label className={labelClass} htmlFor="scar">Carousel images (one URL per line)</label>
+              <textarea
+                id="scar"
+                className={`${inputClass} min-h-[80px] font-mono text-xs`}
+                value={storeCarouselText}
+                onChange={(e) => setStoreCarouselText(e.target.value)}
+                disabled={!isAdminish}
+                placeholder={"https://example.com/banner-1.jpg\nhttps://example.com/banner-2.jpg"}
+              />
+            </div>
           </div>
-          <div className="space-y-1">
-            <label className={labelClass} htmlFor="sl">Logo URL (optional)</label>
-            <input
-              id="sl"
-              className={inputClass}
-              value={storeLogoUrl}
-              onChange={(e) => setStoreLogoUrl(e.target.value)}
-              disabled={!isAdminish}
-              placeholder="https://…"
-            />
+
+          <div className="space-y-2 border-t border-border pt-4">
+            <p className="text-xs font-medium text-muted-foreground">Social media links</p>
+            <div className="grid gap-3 sm:grid-cols-2">
+              {(
+                [
+                  ["Facebook", socialFacebook, setSocialFacebook],
+                  ["Instagram", socialInstagram, setSocialInstagram],
+                  ["Twitter / X", socialTwitter, setSocialTwitter],
+                  ["TikTok", socialTiktok, setSocialTiktok],
+                  ["LinkedIn", socialLinkedin, setSocialLinkedin],
+                  ["YouTube", socialYoutube, setSocialYoutube],
+                  ["WhatsApp", socialWhatsapp, setSocialWhatsapp],
+                ] as const
+              ).map(([label, val, set]) => (
+                <div key={label} className="space-y-1">
+                  <label className={labelClass}>{label}</label>
+                  <input
+                    className={inputClass}
+                    value={val}
+                    onChange={(e) => set(e.target.value)}
+                    disabled={!isAdminish}
+                    placeholder="https://…"
+                  />
+                </div>
+              ))}
+            </div>
           </div>
-          <div className="space-y-1">
-            <label className={labelClass} htmlFor="tap">TAP destination ID</label>
-            <input
-              id="tap"
-              className={inputClass}
-              value={tapDestinationId}
-              onChange={(e) => setTapDestinationId(e.target.value)}
-              disabled={!isAdminish}
-              placeholder="dest_… from TAP marketplace onboarding"
-            />
-            <p className="text-[10px] text-muted-foreground">
-              Required to accept card payments in your online store. Obtain this from your TAP
-              merchant / marketplace setup.
-            </p>
+
+          <div className="space-y-2 border-t border-border pt-4">
+            <p className="text-xs font-medium text-muted-foreground">Footer policies</p>
+            <div className="space-y-3">
+              <div className="space-y-1">
+                <label className={labelClass} htmlFor="terms">Terms &amp; conditions</label>
+                <textarea
+                  id="terms"
+                  className={`${inputClass} min-h-[80px] text-xs`}
+                  value={storeTermsText}
+                  onChange={(e) => setStoreTermsText(e.target.value)}
+                  disabled={!isAdminish}
+                />
+              </div>
+              <div className="space-y-1">
+                <label className={labelClass} htmlFor="priv">Privacy policy</label>
+                <textarea
+                  id="priv"
+                  className={`${inputClass} min-h-[80px] text-xs`}
+                  value={storePrivacyText}
+                  onChange={(e) => setStorePrivacyText(e.target.value)}
+                  disabled={!isAdminish}
+                />
+              </div>
+              <div className="space-y-1">
+                <label className={labelClass} htmlFor="refund">Refund policy</label>
+                <textarea
+                  id="refund"
+                  className={`${inputClass} min-h-[80px] text-xs`}
+                  value={storeRefundPolicyText}
+                  onChange={(e) => setStoreRefundPolicyText(e.target.value)}
+                  disabled={!isAdminish}
+                />
+              </div>
+            </div>
           </div>
-          <div className="space-y-1">
-            <label className={labelClass} htmlFor="mcr">Custom commission % (optional)</label>
-            <input
-              id="mcr"
-              className={inputClass}
-              value={marketplaceCommissionRate}
-              onChange={(e) => setMarketplaceCommissionRate(e.target.value)}
-              disabled={!isAdminish}
-              placeholder="Leave blank for platform default"
-            />
+
+          <div className="space-y-2 border-t border-border pt-4">
+            <p className="text-xs font-medium text-muted-foreground">Payments (TAP)</p>
+            <div className="space-y-1">
+              <label className={labelClass} htmlFor="tap">TAP destination ID</label>
+              <input
+                id="tap"
+                className={inputClass}
+                value={tapDestinationId}
+                onChange={(e) => setTapDestinationId(e.target.value)}
+                disabled={!isAdminish}
+                placeholder="dest_… from TAP marketplace onboarding"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className={labelClass} htmlFor="mcr">Custom commission % (optional)</label>
+              <input
+                id="mcr"
+                className={inputClass}
+                value={marketplaceCommissionRate}
+                onChange={(e) => setMarketplaceCommissionRate(e.target.value)}
+                disabled={!isAdminish}
+                placeholder="Leave blank for platform default"
+              />
+            </div>
           </div>
+
           {storeEnabled && me.data?.data?.tenant?.slug && (
             <p className="text-xs text-muted-foreground">
               Your store:{" "}

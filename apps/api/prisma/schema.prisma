@@ -21,6 +21,14 @@ model Tenant {
   storeEnabled       Boolean  @default(false)
   storeHeadline      String?
   storeLogoUrl       String?
+  storeContactEmail  String?
+  storePhone         String?
+  storeCarouselImages Json?
+  storeSocialLinks   Json?
+  storeTermsText     String?  @db.Text
+  storePrivacyText   String?  @db.Text
+  storeRefundPolicyText String? @db.Text
+  uiTheme              String   @default("light")
   tapDestinationId   String?
   marketplaceCommissionRate Decimal? @db.Decimal(9, 4)
   createdAt          DateTime @default(now())
